@@ -1,0 +1,7 @@
+{
+  "hosting": {
+    "site": "aics-budget",
+    "public": ".",
+    "ignore": ["firebase.json", ".firebaserc", ".git/**"]
+  }
+}

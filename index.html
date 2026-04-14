@@ -1,0 +1,1842 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>가계부</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+:root {
+  --bg: #0f0f10;
+  --bg2: #18181b;
+  --bg3: #232327;
+  --bg4: #2c2c31;
+  --border: rgba(255,255,255,0.08);
+  --border2: rgba(255,255,255,0.04);
+  --text: #f2f2f3;
+  --text2: #9999a6;
+  --text3: #5c5c6e;
+  --danger: #e24b4a;
+  --success: #1d9e75;
+  --accent: #6c6cff;
+  --radius: 10px;
+  --radius-lg: 14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Apple SD Gothic Neo',sans-serif;min-height:100vh;}
+input,select,button{font-family:inherit;}
+
+/* Layout */
+.app{display:flex;flex-direction:column;min-height:100vh;max-width:960px;margin:0 auto;padding:0 16px;}
+.header{display:flex;align-items:center;justify-content:space-between;padding:18px 0 14px;}
+.header-title{font-size:20px;font-weight:700;letter-spacing:-0.5px;}
+.header-sub{font-size:13px;color:var(--text2);}
+
+/* Navigation tabs */
+.nav-tabs{display:flex;gap:2px;background:var(--bg2);border-radius:var(--radius);padding:4px;margin-bottom:20px;border:1px solid var(--border);}
+.nav-tab{flex:1;padding:8px;font-size:13px;font-weight:500;background:transparent;border:none;color:var(--text2);cursor:pointer;border-radius:8px;transition:all .15s;}
+.nav-tab.active{background:var(--bg3);color:var(--text);}
+.nav-tab:hover:not(.active){color:var(--text);}
+
+/* Month nav */
+.month-nav{display:flex;align-items:center;gap:12px;margin-bottom:18px;}
+.month-nav-btn{width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--border);border-radius:8px;cursor:pointer;color:var(--text2);font-size:14px;transition:all .15s;}
+.month-nav-btn:hover{background:var(--bg3);color:var(--text);}
+.month-label{font-size:18px;font-weight:600;flex:1;text-align:center;}
+.month-nav-right{display:flex;align-items:center;gap:8px;}
+
+/* Summary cards */
+.summary-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;}
+.card-label{font-size:11px;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;}
+.card-value{font-size:20px;font-weight:600;line-height:1;}
+.card-value.danger{color:var(--danger);}
+.card-value.success{color:var(--success);}
+.card-sub{font-size:11px;color:var(--text3);margin-top:4px;}
+
+/* Billing banner */
+.billing-banner{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:16px;display:flex;gap:0;overflow:hidden;}
+.billing-col{flex:1;padding:0 12px;border-right:1px solid var(--border);}
+.billing-col:first-child{padding-left:0;}
+.billing-col:last-child{border-right:none;}
+.billing-col-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+.billing-col-period{font-size:10px;color:var(--text3);margin-bottom:5px;}
+.billing-col-val{font-size:16px;font-weight:700;}
+.billing-col-sub{font-size:10px;color:var(--text3);margin-top:3px;}
+
+/* Toolbar */
+.toolbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.toolbar-label{font-size:12px;color:var(--text2);}
+.sort-btn{padding:5px 12px;font-size:12px;background:var(--bg2);border:1px solid var(--border);border-radius:7px;color:var(--text2);cursor:pointer;transition:all .15s;}
+.sort-btn.active{background:var(--bg3);color:var(--text);border-color:var(--border);}
+.sort-btn:hover{color:var(--text);}
+.view-toggle{display:flex;gap:2px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:3px;}
+.view-btn{padding:5px 11px;font-size:12px;background:transparent;border:none;color:var(--text2);cursor:pointer;border-radius:6px;transition:all .15s;}
+.view-btn.active{background:var(--bg3);color:var(--text);}
+.ml-auto{margin-left:auto;}
+
+/* Category sections */
+.cat-section{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:8px;overflow:hidden;}
+.cat-header{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;user-select:none;transition:background .15s;}
+.cat-header:hover{background:var(--bg3);}
+.cat-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.cat-title{font-size:13px;font-weight:500;flex:1;}
+.cat-total{font-size:13px;font-weight:600;color:var(--text2);}
+.cat-count{font-size:11px;color:var(--text3);margin-left:4px;}
+.cat-chevron{font-size:10px;color:var(--text3);margin-left:4px;transition:transform .2s;}
+.cat-bar-wrap{padding:2px 16px 10px;}
+.cat-bar-bg{height:3px;background:var(--bg3);border-radius:2px;overflow:hidden;}
+.cat-bar{height:100%;border-radius:2px;transition:width .3s;}
+
+/* Item rows */
+.item-row{display:grid;grid-template-columns:52px 1fr auto auto auto;align-items:center;gap:8px;padding:9px 16px;border-top:1px solid var(--border2);transition:background .1s;}
+.item-row:hover{background:var(--bg3);}
+.item-date{font-size:11px;color:var(--text3);font-variant-numeric:tabular-nums;}
+.item-name{font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.item-amt{font-size:13px;font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums;}
+.item-amt.plus{color:var(--success);}
+.item-amt.minus{color:var(--text);}
+.item-actions{display:flex;gap:4px;opacity:0;transition:opacity .15s;}
+.item-row:hover .item-actions{opacity:1;}
+.action-btn{padding:3px 7px;font-size:11px;border:1px solid var(--border);background:transparent;border-radius:5px;color:var(--text2);cursor:pointer;transition:all .15s;}
+.action-btn:hover{background:var(--bg4);color:var(--text);}
+.action-btn.del:hover{background:rgba(226,75,74,.15);border-color:rgba(226,75,74,.4);color:var(--danger);}
+
+/* Add/Edit form */
+.form-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;}
+.form-title{font-size:14px;font-weight:600;margin-bottom:12px;}
+.form-row{display:flex;gap:8px;flex-wrap:wrap;}
+.form-row input,.form-row select{font-size:13px;padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);outline:none;transition:border-color .15s;}
+.form-row input:focus,.form-row select:focus{border-color:var(--accent);}
+.f-date{width:130px;}
+.f-name{flex:2;min-width:100px;}
+.f-amt{width:110px;}
+.f-cat{flex:1;min-width:100px;}
+.f-type{width:72px;}
+.form-actions{display:flex;gap:8px;margin-top:10px;}
+.btn{padding:8px 16px;font-size:13px;font-weight:500;border-radius:8px;border:1px solid var(--border);cursor:pointer;transition:all .15s;}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+.btn-primary:hover{opacity:.85;}
+.btn-ghost{background:transparent;color:var(--text2);}
+.btn-ghost:hover{background:var(--bg3);color:var(--text);}
+.btn-danger{background:transparent;color:var(--danger);border-color:rgba(226,75,74,.3);}
+.btn-danger:hover{background:rgba(226,75,74,.1);}
+
+/* Add button */
+.add-entry-btn{width:100%;padding:12px;font-size:13px;font-weight:500;background:transparent;border:1px dashed var(--border);border-radius:var(--radius-lg);color:var(--text2);cursor:pointer;transition:all .15s;margin-bottom:8px;}
+.add-entry-btn:hover{background:var(--bg2);color:var(--text);border-style:solid;}
+
+/* Calendar */
+.calendar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:12px;}
+.cal-header{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--border);}
+.cal-day-name{text-align:center;padding:10px 4px;font-size:11px;color:var(--text3);font-weight:500;}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);}
+.cal-cell{min-height:78px;border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);padding:6px;cursor:pointer;transition:background .15s;}
+.cal-cell:nth-child(7n){border-right:none;}
+.cal-cell:hover{background:var(--bg3);}
+.cal-cell.other-month{opacity:.3;}
+.cal-cell.today .cal-date{background:var(--accent);color:#fff;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:600;}
+.cal-cell.selected{background:var(--bg3);}
+.cal-cell.selected .cal-date{color:var(--accent);}
+.cal-date{font-size:12px;font-weight:500;margin-bottom:3px;color:var(--text);}
+.cal-cell.sun .cal-date{color:#e24b4a;}
+.cal-cell.sat .cal-date{color:#6c6cff;}
+.cal-amt{font-size:10px;color:var(--danger);font-weight:500;font-variant-numeric:tabular-nums;}
+.cal-in{font-size:10px;color:var(--success);font-weight:500;}
+.cal-dots{display:flex;gap:2px;flex-wrap:wrap;margin-top:2px;}
+.cal-dot{width:5px;height:5px;border-radius:50%;}
+
+/* Day detail */
+.day-detail{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:12px;}
+.day-detail-title{font-size:14px;font-weight:600;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.day-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border2);}
+.day-item:last-child{border-bottom:none;}
+.day-cat-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.day-name{flex:1;font-size:13px;}
+.day-amt{font-size:13px;font-weight:500;}
+.day-actions{display:flex;gap:4px;}
+
+/* Stats */
+.stat-section{margin-bottom:16px;}
+.stat-cards-2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
+.chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px;}
+.chart-card-title{font-size:13px;font-weight:500;color:var(--text2);margin-bottom:14px;}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:12px;}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2);}
+.leg-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0;}
+
+/* Monthly compare table */
+.compare-table{width:100%;border-collapse:collapse;font-size:12px;}
+.compare-table th{text-align:left;padding:8px 10px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);}
+.compare-table td{padding:8px 10px;border-bottom:1px solid var(--border2);}
+.compare-table tr:hover td{background:var(--bg3);}
+.compare-table .num{text-align:right;font-variant-numeric:tabular-nums;}
+.compare-bar-cell{width:120px;}
+.mini-bar-bg{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;}
+.mini-bar{height:100%;border-radius:2px;background:var(--accent);}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 18px;font-size:13px;color:var(--text2);opacity:0;transition:all .25s;pointer-events:none;z-index:999;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px;}
+.modal{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;width:100%;max-width:440px;}
+.modal-title{font-size:16px;font-weight:600;margin-bottom:16px;}
+.modal-field{margin-bottom:12px;}
+.modal-label{font-size:12px;color:var(--text2);margin-bottom:5px;}
+.modal-input{width:100%;padding:9px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;outline:none;}
+.modal-input:focus{border-color:var(--accent);}
+.modal-actions{display:flex;gap:8px;margin-top:16px;justify-content:flex-end;}
+
+/* Empty state */
+.empty{text-align:center;padding:40px 16px;color:var(--text3);font-size:13px;}
+
+/* Responsive */
+@media(max-width:600px){
+  .summary-cards{grid-template-columns:repeat(2,1fr);}
+  .summary-cards .card:last-child{grid-column:span 2;}
+  .card-value{font-size:16px;}
+  .form-row{gap:6px;}
+  .stat-cards-2{grid-template-columns:1fr;}
+  .compare-bar-cell{display:none;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <div class="header-title">가계부</div>
+      <div class="header-sub" id="headerSub"></div>
+    </div>
+  </div>
+
+  <div class="nav-tabs">
+    <button class="nav-tab active" id="tab-list" onclick="switchTab('list')">내역</button>
+    <button class="nav-tab" id="tab-calendar" onclick="switchTab('calendar')">달력</button>
+    <button class="nav-tab" id="tab-stats" onclick="switchTab('stats')">통계</button>
+    <button class="nav-tab" id="tab-compare" onclick="switchTab('compare')">월 비교</button>
+  </div>
+
+  <!-- LIST VIEW -->
+  <div id="view-list">
+    <!-- 달별 / 청구별 토글 -->
+    <div style="display:flex;gap:4px;margin-bottom:12px;">
+      <button class="view-btn active" id="mode-cal" onclick="setListMode('cal')" style="flex:1;padding:8px;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;color:var(--text);cursor:pointer;">📅 달별</button>
+      <button class="view-btn" id="mode-bill" onclick="setListMode('bill')" style="flex:1;padding:8px;font-size:13px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;color:var(--text2);cursor:pointer;">💳 카드 청구별</button>
+    </div>
+    <div class="month-nav">
+      <button class="month-nav-btn" onclick="navPrev()">◀</button>
+      <div class="month-label" id="listMonthLabel"></div>
+      <button class="month-nav-btn" onclick="navNext()">▶</button>
+    </div>
+
+    <div class="summary-cards">
+      <div class="card">
+        <div class="card-label">총 지출</div>
+        <div class="card-value danger" id="l-out">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">환급/수입</div>
+        <div class="card-value success" id="l-in">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">실지출</div>
+        <div class="card-value" id="l-net">-</div>
+        <div class="card-sub" id="l-daily"></div>
+      </div>
+    </div>
+
+    <!-- 카드 청구 배너 -->
+    <div class="billing-banner" id="billingBanner"></div>
+
+    <div class="toolbar">
+      <span class="toolbar-label">정렬:</span>
+      <button class="sort-btn active" id="sort-date" onclick="setSort('date')">날짜순</button>
+      <button class="sort-btn" id="sort-amt" onclick="setSort('amt')">금액순</button>
+      <button class="sort-btn" id="sort-cat" onclick="setSort('cat')">카테고리</button>
+      <div class="ml-auto" style="display:flex;gap:6px;align-items:center;">
+        <button class="sort-btn" id="toggleAllBtn" onclick="toggleAllSections()">전체 닫기</button>
+        <div class="view-toggle">
+          <button class="view-btn active" id="vbtn-cat" onclick="setGrouping('cat')">카테고리</button>
+          <button class="view-btn" id="vbtn-all" onclick="setGrouping('all')">전체</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="listBody"></div>
+
+    <button class="add-entry-btn" onclick="openAdd()">+ 내역 추가</button>
+  </div>
+
+  <!-- CALENDAR VIEW -->
+  <div id="view-calendar" style="display:none;">
+    <div class="month-nav">
+      <button class="month-nav-btn" onclick="changeMonth(-1)">◀</button>
+      <div class="month-label" id="calMonthLabel"></div>
+      <button class="month-nav-btn" onclick="changeMonth(1)">▶</button>
+    </div>
+
+    <div class="calendar">
+      <div class="cal-header">
+        <div class="cal-day-name" style="color:#e24b4a">일</div>
+        <div class="cal-day-name">월</div>
+        <div class="cal-day-name">화</div>
+        <div class="cal-day-name">수</div>
+        <div class="cal-day-name">목</div>
+        <div class="cal-day-name">금</div>
+        <div class="cal-day-name" style="color:#6c6cff">토</div>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+    </div>
+
+    <div id="dayDetail" style="display:none;"></div>
+    <button class="add-entry-btn" onclick="openAdd()">+ 내역 추가</button>
+  </div>
+
+  <!-- STATS VIEW -->
+  <div id="view-stats" style="display:none;">
+    <div class="month-nav">
+      <button class="month-nav-btn" onclick="changeMonth(-1)">◀</button>
+      <div class="month-label" id="statsMonthLabel"></div>
+      <button class="month-nav-btn" onclick="changeMonth(1)">▶</button>
+    </div>
+
+    <!-- 카드 청구 섹션 -->
+    <div class="chart-card" id="statsBillingCard" style="margin-bottom:16px;"></div>
+
+    <div class="stat-cards-2">
+      <div class="card">
+        <div class="card-label">이번달 실지출</div>
+        <div class="card-value danger" id="s-this">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">지난달 대비</div>
+        <div class="card-value" id="s-diff">-</div>
+        <div class="card-sub" id="s-diff-sub"></div>
+      </div>
+      <div class="card">
+        <div class="card-label">최고 지출 카테고리</div>
+        <div class="card-value" id="s-top">-</div>
+      </div>
+      <div class="card">
+        <div class="card-label">하루 평균 지출</div>
+        <div class="card-value" id="s-daily">-</div>
+      </div>
+    </div>
+
+    <!-- Category ranking -->
+    <div class="chart-card">
+      <div class="chart-card-title">지출 그룹 분석 <span style="font-size:11px;color:var(--text3);font-weight:400;">줄일 수 있는 항목 파악</span></div>
+      <div id="spendGroups"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-title">카테고리별 지출 순위</div>
+      <div id="catRanking"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-title">카테고리 비율</div>
+      <div style="position:relative;height:220px;"><canvas id="pieChart"></canvas></div>
+      <div class="legend" id="pieLegend"></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-title">월별 실지출 (최근 6개월)</div>
+      <div style="position:relative;height:200px;"><canvas id="barChart"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-card-title">카테고리별 월 추이 (상위 4개)</div>
+      <div style="position:relative;height:220px;"><canvas id="lineChart"></canvas></div>
+      <div class="legend" id="lineLegend"></div>
+    </div>
+  </div>
+
+  <!-- COMPARE VIEW -->
+  <div id="view-compare" style="display:none;">
+    <div class="chart-card">
+      <div class="chart-card-title">월별 지출 비교</div>
+      <div style="position:relative;height:240px;"><canvas id="compareBar"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title">카테고리별 월 비교</div>
+      <div id="catCompareTable"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title">월별 상세 내역</div>
+      <div id="monthlyTable"></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-card-title">그룹별 월 비교 <span style="font-size:11px;color:var(--text3);font-weight:400;">식비 · 소비/쇼핑 · 고정지출</span></div>
+      <div id="groupCompareTable"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal for Add/Edit -->
+<div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title" id="modalTitle">내역 추가</div>
+    <div class="modal-field">
+      <div class="modal-label">날짜</div>
+      <input class="modal-input" type="date" id="mDate">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">내용</div>
+      <input class="modal-input" type="text" id="mName" placeholder="예: 배민, 스타벅스...">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">금액 (원)</div>
+      <input class="modal-input" type="number" id="mAmt" placeholder="15000">
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">카테고리</div>
+      <select class="modal-input" id="mCat" onchange="autoType()">
+        <option>배달/외식</option>
+        <option>통신/공과금</option>
+        <option>보험</option>
+        <option>쇼핑</option>
+        <option>식료품/마트</option>
+        <option>카페/간식</option>
+        <option>교통</option>
+        <option>의료/건강</option>
+        <option>구독서비스</option>
+        <option>상품권/포인트</option>
+        <option>선물/경조사</option>
+        <option>여가/오락</option>
+        <option>기타</option>
+        <option>환급/할인</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <div class="modal-label">유형</div>
+      <select class="modal-input" id="mType">
+        <option value="지출">지출</option>
+        <option value="수입">수입</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="modalDelBtn" style="display:none;margin-right:auto;" onclick="deleteModalEntry()">삭제</button>
+      <button class="btn btn-ghost" onclick="closeModalDirect()">취소</button>
+      <button class="btn btn-primary" onclick="saveModal()">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CAT_COLORS={
+  '배달/외식':'#E24B4A',
+  '통신/공과금':'#378ADD',
+  '보험':'#7F77DD',
+  '쇼핑':'#D4537E',
+  '식료품/마트':'#639922',
+  '카페/간식':'#BA7517',
+  '교통':'#888780',
+  '의료/건강':'#5DCAA5',
+  '구독서비스':'#7B9ED9',
+  '상품권/포인트':'#C4973A',
+  '선물/경조사':'#C4698A',
+  '여가/오락':'#5DBAAA',
+  '기타':'#B4B2A9',
+  '환급/할인':'#1D9E75'
+};
+const CAT_ORDER=['배달/외식','통신/공과금','보험','쇼핑','식료품/마트','카페/간식','교통','의료/건강','구독서비스','상품권/포인트','선물/경조사','여가/오락','기타','환급/할인'];
+const STORAGE_KEY='budget_app_v1'; // ← 절대 바꾸지 않음. 수정은 마이그레이션으로만
+const VER_KEY='budget_app_ver';
+const DATA_VER=6;
+const BILLING_CUTOFF=23;
+
+// ── Seed data ──────────────────────────────────────────
+const SEED={
+  '2026-01':[
+    {date:'26.1.24',name:'쿠팡',amt:9990,cat:'쇼핑',type:'지출'},
+    {date:'26.1.24',name:'쿠팡(와우 멤버십)',amt:7890,cat:'구독서비스',type:'지출'},
+    {date:'26.1.24',name:'쿠팡이츠',amt:15000,cat:'배달/외식',type:'지출'},
+    {date:'26.1.24',name:'카카오',amt:990,cat:'구독서비스',type:'지출'},
+    {date:'26.1.24',name:'배민클럽',amt:1990,cat:'구독서비스',type:'지출'},
+    {date:'26.1.25',name:'토스프라임',amt:5900,cat:'구독서비스',type:'지출'},
+    {date:'26.1.26',name:'한국전력',amt:20500,cat:'통신/공과금',type:'지출'},
+    {date:'26.1.27',name:'메가커피',amt:9800,cat:'카페/간식',type:'지출'},
+    {date:'26.1.27',name:'CJ제일제당',amt:39894,cat:'식료품/마트',type:'지출'},
+    {date:'26.1.28',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+    {date:'26.1.29',name:'배민',amt:14642,cat:'배달/외식',type:'지출'},
+    {date:'26.1.29',name:'네이버페이',amt:10163,cat:'쇼핑',type:'지출'},
+    {date:'26.1.30',name:'네이버페이',amt:8640,cat:'쇼핑',type:'지출'},
+    {date:'26.1.30',name:'쿠팡이츠',amt:8900,cat:'배달/외식',type:'지출'},
+    {date:'26.1.31',name:'배민',amt:9500,cat:'배달/외식',type:'지출'},
+  ],
+  '2026-02':[
+    {date:'26.2.1',name:'지마켓',amt:9793,cat:'쇼핑',type:'지출'},
+    {date:'26.2.1',name:'청구할인',amt:737,cat:'환급/할인',type:'수입'},
+    {date:'26.2.1',name:'네이버페이',amt:25920,cat:'쇼핑',type:'지출'},
+    {date:'26.2.1',name:'알리익스프레스',amt:26742,cat:'쇼핑',type:'지출'},
+    {date:'26.2.2',name:'네이버페이',amt:8230,cat:'쇼핑',type:'지출'},
+    {date:'26.2.3',name:'삼천리도시가스',amt:103220,cat:'통신/공과금',type:'지출'},
+    {date:'26.2.3',name:'카카오',amt:16826,cat:'선물/경조사',type:'지출'},
+    {date:'26.2.4',name:'배민',amt:18500,cat:'배달/외식',type:'지출'},
+    {date:'26.2.6',name:'네이버페이',amt:18000,cat:'쇼핑',type:'지출'},
+    {date:'26.2.6',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+    {date:'26.2.8',name:'배민',amt:10600,cat:'배달/외식',type:'지출'},
+    {date:'26.2.9',name:'LGU+ 통신',amt:83650,cat:'통신/공과금',type:'지출'},
+    {date:'26.2.9',name:'청구할인',amt:5000,cat:'환급/할인',type:'수입'},
+    {date:'26.2.10',name:'비바리퍼블리카',amt:12201,cat:'쇼핑',type:'지출'},
+    {date:'26.2.10',name:'비바리퍼블리카',amt:23370,cat:'쇼핑',type:'지출'},
+    {date:'26.2.10',name:'이재성초밥',amt:57800,cat:'배달/외식',type:'지출'},
+    {date:'26.2.10',name:'스타벅스',amt:5600,cat:'카페/간식',type:'지출'},
+    {date:'26.2.10',name:'청구할인',amt:5600,cat:'환급/할인',type:'수입'},
+    {date:'26.2.11',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+    {date:'26.2.11',name:'DB손해보험',amt:31000,cat:'보험',type:'지출'},
+    {date:'26.2.12',name:'배민',amt:10900,cat:'배달/외식',type:'지출'},
+    {date:'26.2.14',name:'배민',amt:8700,cat:'배달/외식',type:'지출'},
+    {date:'26.2.14',name:'라시에스타',amt:57000,cat:'배달/외식',type:'지출'},
+    {date:'26.2.14',name:'나이키',amt:103500,cat:'쇼핑',type:'지출'},
+    {date:'26.2.14',name:'미자',amt:25000,cat:'배달/외식',type:'지출'},
+    {date:'26.2.15',name:'CGV',amt:13000,cat:'여가/오락',type:'지출'},
+    {date:'26.2.15',name:'다이소',amt:13200,cat:'쇼핑',type:'지출'},
+    {date:'26.2.15',name:'노리존',amt:5000,cat:'여가/오락',type:'지출'},
+    {date:'26.2.15',name:'현대식자재마트',amt:9540,cat:'식료품/마트',type:'지출'},
+    {date:'26.2.16',name:'비바리퍼블리카',amt:81981,cat:'쇼핑',type:'지출'},
+    {date:'26.2.16',name:'배민',amt:17500,cat:'배달/외식',type:'지출'},
+    {date:'26.2.16',name:'이마트',amt:39530,cat:'식료품/마트',type:'지출'},
+    {date:'26.2.17',name:'비바리퍼블리카',amt:33200,cat:'쇼핑',type:'지출'},
+    {date:'26.2.17',name:'배민',amt:8737,cat:'배달/외식',type:'지출'},
+    {date:'26.2.17',name:'에버랜드',amt:8800,cat:'여가/오락',type:'지출'},
+    {date:'26.2.17',name:'에버랜드',amt:20000,cat:'여가/오락',type:'지출'},
+    {date:'26.2.17',name:'에버랜드',amt:30000,cat:'여가/오락',type:'지출'},
+    {date:'26.2.17',name:'에버랜드',amt:12000,cat:'여가/오락',type:'지출'},
+    {date:'26.2.17',name:'에버랜드',amt:10300,cat:'여가/오락',type:'지출'},
+    {date:'26.2.17',name:'풍년갈비',amt:80000,cat:'배달/외식',type:'지출'},
+    {date:'26.2.18',name:'래미안서초유니빌',amt:2000,cat:'통신/공과금',type:'지출'},
+    {date:'26.2.18',name:'비바리퍼블리카',amt:7390,cat:'쇼핑',type:'지출'},
+    {date:'26.2.18',name:'비바리퍼블리카',amt:21790,cat:'쇼핑',type:'지출'},
+    {date:'26.2.18',name:'크라프카페',amt:20300,cat:'카페/간식',type:'지출'},
+    {date:'26.2.19',name:'비바리퍼블리카',amt:1900,cat:'카페/간식',type:'지출'},
+    {date:'26.2.19',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+    {date:'26.2.20',name:'신한라이프',amt:22720,cat:'보험',type:'지출'},
+    {date:'26.2.20',name:'NICE통신',amt:29000,cat:'통신/공과금',type:'지출'},
+    {date:'26.2.20',name:'AIA생명',amt:4507,cat:'보험',type:'지출'},
+    {date:'26.2.20',name:'AIA생명',amt:5500,cat:'보험',type:'지출'},
+    {date:'26.2.24',name:'배민',amt:15400,cat:'배달/외식',type:'지출'},
+    {date:'26.2.24',name:'기린푸드코트',amt:16000,cat:'배달/외식',type:'지출'},
+    {date:'26.2.24',name:'강남신세계 보앤미',amt:37000,cat:'쇼핑',type:'지출'},
+    {date:'26.2.24',name:'서울대공원',amt:10000,cat:'여가/오락',type:'지출'},
+    {date:'26.2.24',name:'카카오모빌리티',amt:3000,cat:'교통',type:'지출'},
+    {date:'26.2.24',name:'스타벅스코리아',amt:6200,cat:'카페/간식',type:'지출'},
+    {date:'26.2.24',name:'CU 편의점',amt:2500,cat:'카페/간식',type:'지출'},
+    {date:'26.2.24',name:'동원건설산업',amt:4000,cat:'통신/공과금',type:'지출'},
+    {date:'26.2.24',name:'동원건설산업',amt:4000,cat:'통신/공과금',type:'지출'},
+    {date:'26.2.24',name:'신세계센트럴',amt:9000,cat:'쇼핑',type:'지출'},
+    {date:'26.2.24',name:'배민클럽 환불',amt:1990,cat:'환급/할인',type:'수입'},
+    {date:'26.2.24',name:'청구할인',amt:4400,cat:'환급/할인',type:'수입'},
+    {date:'26.2.25',name:'시흥하늘휴게소',amt:15000,cat:'교통',type:'지출'},
+    {date:'26.2.25',name:'한국전력',amt:21250,cat:'통신/공과금',type:'지출'},
+    {date:'26.2.26',name:'배민',amt:12100,cat:'배달/외식',type:'지출'},
+    {date:'26.2.26',name:'올리브영',amt:11600,cat:'쇼핑',type:'지출'},
+    {date:'26.2.26',name:'선물하기 카카오',amt:8000,cat:'선물/경조사',type:'지출'},
+    {date:'26.2.26',name:'메가커피',amt:700,cat:'카페/간식',type:'지출'},
+    {date:'26.2.27',name:'카카오 상품권',amt:30000,cat:'상품권/포인트',type:'지출'},
+    {date:'26.2.28',name:'배민',amt:18000,cat:'배달/외식',type:'지출'},
+    {date:'26.2.28',name:'올리브영',amt:11600,cat:'쇼핑',type:'지출'},
+  ],
+  '2026-03':[
+    {date:'26.3.1',name:'으뜸50안경',amt:116000,cat:'의료/건강',type:'지출'},
+    {date:'26.3.1',name:'비버웍스',amt:37500,cat:'구독서비스',type:'지출'},
+    {date:'26.3.1',name:'비버웍스',amt:20500,cat:'구독서비스',type:'지출'},
+    {date:'26.3.1',name:'배민',amt:26300,cat:'배달/외식',type:'지출'},
+    {date:'26.3.1',name:'시흥하늘휴게소',amt:2500,cat:'교통',type:'지출'},
+    {date:'26.3.1',name:'배민클럽',amt:1990,cat:'구독서비스',type:'지출'},
+    {date:'26.3.2',name:'CJ제일제당',amt:31719,cat:'식료품/마트',type:'지출'},
+    {date:'26.3.2',name:'밀도 롯데잠실',amt:25100,cat:'배달/외식',type:'지출'},
+    {date:'26.3.2',name:'아메리칸트레일러',amt:14480,cat:'쇼핑',type:'지출'},
+    {date:'26.3.3',name:'삼천리도시가스',amt:98380,cat:'통신/공과금',type:'지출'},
+    {date:'26.3.5',name:'쿠팡',amt:14430,cat:'쇼핑',type:'지출'},
+    {date:'26.3.5',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+    {date:'26.3.6',name:'배민',amt:18000,cat:'배달/외식',type:'지출'},
+    {date:'26.3.7',name:'배민',amt:17570,cat:'배달/외식',type:'지출'},
+    {date:'26.3.7',name:'CJ제일제당',amt:11239,cat:'식료품/마트',type:'지출'},
+    {date:'26.3.9',name:'LGU+ 통신',amt:83680,cat:'통신/공과금',type:'지출'},
+    {date:'26.3.9',name:'선물하기 카카오',amt:12700,cat:'선물/경조사',type:'지출'},
+    {date:'26.3.9',name:'바지락칼국수',amt:10000,cat:'배달/외식',type:'지출'},
+    {date:'26.3.9',name:'청구할인',amt:5000,cat:'환급/할인',type:'수입'},
+    {date:'26.3.11',name:'DB손해보험',amt:31000,cat:'보험',type:'지출'},
+    {date:'26.3.14',name:'배민',amt:11000,cat:'배달/외식',type:'지출'},
+    {date:'26.3.14',name:'연세유업',amt:9288,cat:'식료품/마트',type:'지출'},
+    {date:'26.3.15',name:'안양 전자담배',amt:79000,cat:'기타',type:'지출'},
+    {date:'26.3.19',name:'배민',amt:13000,cat:'배달/외식',type:'지출'},
+    {date:'26.3.19',name:'쿠팡',amt:20000,cat:'쇼핑',type:'지출'},
+    {date:'26.3.20',name:'AIA생명',amt:5500,cat:'보험',type:'지출'},
+    {date:'26.3.20',name:'신한라이프',amt:22720,cat:'보험',type:'지출'},
+    {date:'26.3.20',name:'AIA생명',amt:4455,cat:'보험',type:'지출'},
+    {date:'26.3.21',name:'다이소',amt:16000,cat:'쇼핑',type:'지출'},
+    {date:'26.3.21',name:'오시 블랙',amt:51800,cat:'쇼핑',type:'지출'},
+    {date:'26.3.21',name:'놀유니버스',amt:13500,cat:'여가/오락',type:'지출'},
+    {date:'26.3.21',name:'월스트릿 휘낭시에',amt:25500,cat:'배달/외식',type:'지출'},
+    {date:'26.3.21',name:'배민',amt:21000,cat:'배달/외식',type:'지출'},
+    {date:'26.3.21',name:'비바리퍼블리카',amt:35000,cat:'구독서비스',type:'지출'},
+    {date:'26.3.22',name:'이마트24',amt:2000,cat:'식료품/마트',type:'지출'},
+    {date:'26.3.22',name:'오수휴게소',amt:6900,cat:'교통',type:'지출'},
+    {date:'26.3.23',name:'스마일페이 G마켓 상품권',amt:2790,cat:'상품권/포인트',type:'지출'},
+    {date:'26.3.23',name:'하동축산농협 하나로마트',amt:57800,cat:'식료품/마트',type:'지출'},
+    {date:'26.3.23',name:'길스가든더로드101',amt:44000,cat:'배달/외식',type:'지출'},
+    {date:'26.3.23',name:'(주)한섬',amt:41460,cat:'쇼핑',type:'지출'},
+    {date:'26.3.23',name:'청구할인',amt:210,cat:'환급/할인',type:'수입'},
+    {date:'26.3.23',name:'포인트 사용',amt:300,cat:'환급/할인',type:'수입'},
+    {date:'26.3.24',name:'버킷플레이스',amt:13500,cat:'쇼핑',type:'지출'},
+    {date:'26.3.24',name:'네이버페이 네이버',amt:9900,cat:'구독서비스',type:'지출'},
+    {date:'26.3.24',name:'스마일페이 옥션 상품권',amt:1500,cat:'상품권/포인트',type:'지출'},
+    {date:'26.3.24',name:'카카오',amt:990,cat:'구독서비스',type:'지출'},
+    {date:'26.3.25',name:'비케이브',amt:35277,cat:'쇼핑',type:'지출'},
+    {date:'26.3.25',name:'토스프라임',amt:5900,cat:'구독서비스',type:'지출'},
+    {date:'26.3.25',name:'한국전력',amt:17780,cat:'통신/공과금',type:'지출'},
+    {date:'26.3.25',name:'바로알림서비스',amt:300,cat:'환급/할인',type:'수입'},
+    {date:'26.3.26',name:'11번가 상품권',amt:48500,cat:'상품권/포인트',type:'지출'},
+    {date:'26.3.26',name:'국대떡볶이',amt:7000,cat:'배달/외식',type:'지출'},
+    {date:'26.3.27',name:'부산밀면',amt:15500,cat:'배달/외식',type:'지출'},
+    {date:'26.3.27',name:'빽다방',amt:4000,cat:'카페/간식',type:'지출'},
+    {date:'26.3.27',name:'배민',amt:12900,cat:'배달/외식',type:'지출'},
+    {date:'26.3.28',name:'토스페이 무신사',amt:19500,cat:'쇼핑',type:'지출'},
+    {date:'26.3.28',name:'맥도날드 안양점',amt:38200,cat:'배달/외식',type:'지출'},
+    {date:'26.3.28',name:'카카오 상품권',amt:100000,cat:'상품권/포인트',type:'지출'},
+    {date:'26.3.28',name:'노리존 일번가점',amt:3000,cat:'여가/오락',type:'지출'},
+    {date:'26.3.28',name:'노리존 일번가점',amt:1000,cat:'여가/오락',type:'지출'},
+    {date:'26.3.30',name:'네이버페이 네이버',amt:700,cat:'구독서비스',type:'지출'},
+    {date:'26.3.30',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+    {date:'26.3.30',name:'네이버페이',amt:44000,cat:'쇼핑',type:'지출'},
+    {date:'26.3.30',name:'다이소',amt:5000,cat:'쇼핑',type:'지출'},
+    {date:'26.3.31',name:'GS25 과천상상자이점',amt:2300,cat:'카페/간식',type:'지출'},
+  ],
+  '2026-04':[
+    {date:'26.4.1',name:'네이버페이',amt:22400,cat:'쇼핑',type:'지출'},
+  ]
+};
+
+// ── State ──────────────────────────────────────────────
+let curY=2026, curM=4, curTab='list';
+let listMode='cal'; // 'cal' = 달별, 'bill' = 카드청구별
+let billY=2026, billM=4; // 청구별 모드에서 현재 보고있는 청구 종료월
+let allData={};
+let sortBy='date';
+let groupBy='cat';
+let secState={};
+let selDate=null;
+let editId=null, editKey=null;
+let charts={pie:null,bar:null,line:null,compare:null};
+
+// ── Storage ──────────────────────────────────────────────
+// ── Migrations ────────────────────────────────────────
+// 마이그레이션은 "이미 저장된 데이터"를 수정함. STORAGE_KEY는 절대 바꾸지 않음.
+const MIGRATIONS={
+  2(data){
+    // 구독/기타 → 세부 카테고리 분류
+    const nameMap={
+      '비버웍스':'구독서비스','배민클럽':'구독서비스','클라우드시큐리티':'구독서비스',
+      '토스프라임':'구독서비스','네이버페이 네이버':'구독서비스','네이버페이':'구독서비스',
+      '카카오모빌리티':'교통','카카오':'구독서비스','비바리퍼블리카':'구독서비스',
+      '놀유니버스':'여가/오락','노리존':'여가/오락','서울대공원':'여가/오락',
+      '선물하기':'선물/경조사','카카오 상품권':'상품권/포인트','상품권':'상품권/포인트',
+      '동원건설산업':'통신/공과금','안양 전자담배':'기타',
+    };
+    for(const rows of Object.values(data)){
+      rows.forEach(r=>{
+        if(r.cat==='구독/기타'){
+          const match=Object.keys(nameMap).find(k=>r.name.includes(k));
+          r.cat=match?nameMap[match]:'기타';
+        }
+      });
+    }
+    return data;
+  },
+  3(data){
+    // LGU+ 금액 수정, G마켓 상품권 금액 수정
+    for(const rows of Object.values(data)){
+      rows.forEach(r=>{
+        if(r.name.includes('LGU+')&&r.amt===88680) r.amt=83680;
+        if((r.name==='G마켓 상품권')&&r.amt===3000){
+          r.name='스마일페이 G마켓 상품권'; r.amt=2790;
+        }
+      });
+    }
+    return data;
+  },
+  4(data){
+    // 스타벅스 누락 항목 추가
+    const feb=data['2026-02']||[];
+    if(!feb.some(r=>r.name.includes('스타벅스'))){
+      feb.push({date:'26.2.24',name:'스타벅스코리아',amt:6200,cat:'카페/간식',type:'지출',id:'mig4_sbx'});
+      data['2026-02']=feb;
+    }
+    return data;
+  },
+  5(data){
+    // 동원건설산업 카테고리 재수정
+    for(const rows of Object.values(data)){
+      rows.forEach(r=>{
+        if(r.name.includes('동원건설산업')) r.cat='통신/공과금';
+      });
+    }
+    return data;
+  },
+  6(data){
+    // 1월 카드청구 데이터 (1/24~1/31) 추가
+    if(!data['2026-01']) data['2026-01']=[];
+    const jan=data['2026-01'];
+    const janItems=[
+      {id:'mig6_j0',date:'26.1.24',name:'쿠팡',amt:9990,cat:'쇼핑',type:'지출'},
+      {id:'mig6_j1',date:'26.1.24',name:'쿠팡(와우 멤버십)',amt:7890,cat:'구독서비스',type:'지출'},
+      {id:'mig6_j2',date:'26.1.24',name:'쿠팡이츠',amt:15000,cat:'배달/외식',type:'지출'},
+      {id:'mig6_j3',date:'26.1.24',name:'카카오',amt:990,cat:'구독서비스',type:'지출'},
+      {id:'mig6_j4',date:'26.1.24',name:'배민클럽',amt:1990,cat:'구독서비스',type:'지출'},
+      {id:'mig6_j5',date:'26.1.25',name:'토스프라임',amt:5900,cat:'구독서비스',type:'지출'},
+      {id:'mig6_j6',date:'26.1.26',name:'한국전력',amt:20500,cat:'통신/공과금',type:'지출'},
+      {id:'mig6_j7',date:'26.1.27',name:'메가커피',amt:9800,cat:'카페/간식',type:'지출'},
+      {id:'mig6_j8',date:'26.1.27',name:'CJ제일제당',amt:39894,cat:'식료품/마트',type:'지출'},
+      {id:'mig6_j9',date:'26.1.28',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+      {id:'mig6_j10',date:'26.1.29',name:'배민',amt:14642,cat:'배달/외식',type:'지출'},
+      {id:'mig6_j11',date:'26.1.29',name:'네이버페이',amt:10163,cat:'쇼핑',type:'지출'},
+      {id:'mig6_j12',date:'26.1.30',name:'네이버페이',amt:8640,cat:'쇼핑',type:'지출'},
+      {id:'mig6_j13',date:'26.1.30',name:'쿠팡이츠',amt:8900,cat:'배달/외식',type:'지출'},
+      {id:'mig6_j14',date:'26.1.31',name:'배민',amt:9500,cat:'배달/외식',type:'지출'},
+    ];
+    janItems.forEach(item=>{ if(!jan.some(r=>r.id===item.id||(r.date===item.date&&r.name===item.name&&r.amt===item.amt))) jan.push(item); });
+    // 2월 카드청구 데이터 (2/1~2/20) 추가
+    if(!data['2026-02']) data['2026-02']=[];
+    const feb=data['2026-02'];
+    const febItems=[
+      {id:'mig6_f0',date:'26.2.1',name:'지마켓',amt:9793,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f1',date:'26.2.1',name:'청구할인',amt:737,cat:'환급/할인',type:'수입'},
+      {id:'mig6_f2',date:'26.2.1',name:'네이버페이',amt:25920,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f3',date:'26.2.1',name:'알리익스프레스',amt:26742,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f4',date:'26.2.2',name:'네이버페이',amt:8230,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f5',date:'26.2.3',name:'삼천리도시가스',amt:103220,cat:'통신/공과금',type:'지출'},
+      {id:'mig6_f6',date:'26.2.3',name:'카카오',amt:16826,cat:'선물/경조사',type:'지출'},
+      {id:'mig6_f7',date:'26.2.4',name:'배민',amt:18500,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f8',date:'26.2.6',name:'네이버페이',amt:18000,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f9',date:'26.2.6',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+      {id:'mig6_f10',date:'26.2.8',name:'배민',amt:10600,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f11',date:'26.2.9',name:'LGU+ 통신',amt:83650,cat:'통신/공과금',type:'지출'},
+      {id:'mig6_f12',date:'26.2.9',name:'청구할인',amt:5000,cat:'환급/할인',type:'수입'},
+      {id:'mig6_f13',date:'26.2.10',name:'비바리퍼블리카',amt:12201,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f14',date:'26.2.10',name:'비바리퍼블리카',amt:23370,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f15',date:'26.2.10',name:'이재성초밥',amt:57800,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f16',date:'26.2.10',name:'스타벅스',amt:5600,cat:'카페/간식',type:'지출'},
+      {id:'mig6_f17',date:'26.2.10',name:'청구할인',amt:5600,cat:'환급/할인',type:'수입'},
+      {id:'mig6_f18',date:'26.2.11',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+      {id:'mig6_f19',date:'26.2.11',name:'DB손해보험',amt:31000,cat:'보험',type:'지출'},
+      {id:'mig6_f20',date:'26.2.12',name:'배민',amt:10900,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f21',date:'26.2.14',name:'배민',amt:8700,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f22',date:'26.2.14',name:'라시에스타',amt:57000,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f23',date:'26.2.14',name:'나이키',amt:103500,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f24',date:'26.2.14',name:'미자',amt:25000,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f25',date:'26.2.15',name:'CGV',amt:13000,cat:'여가/오락',type:'지출'},
+      {id:'mig6_f26',date:'26.2.15',name:'다이소',amt:13200,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f27',date:'26.2.15',name:'노리존',amt:5000,cat:'여가/오락',type:'지출'},
+      {id:'mig6_f28',date:'26.2.15',name:'현대식자재마트',amt:9540,cat:'식료품/마트',type:'지출'},
+      {id:'mig6_f29',date:'26.2.16',name:'비바리퍼블리카',amt:81981,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f30',date:'26.2.16',name:'배민',amt:17500,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f31',date:'26.2.16',name:'이마트',amt:39530,cat:'식료품/마트',type:'지출'},
+      {id:'mig6_f32',date:'26.2.17',name:'비바리퍼블리카',amt:33200,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f33',date:'26.2.17',name:'배민',amt:8737,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f34',date:'26.2.17',name:'에버랜드',amt:8800,cat:'여가/오락',type:'지출'},
+      {id:'mig6_f35',date:'26.2.17',name:'에버랜드',amt:20000,cat:'여가/오락',type:'지출'},
+      {id:'mig6_f36',date:'26.2.17',name:'에버랜드',amt:30000,cat:'여가/오락',type:'지출'},
+      {id:'mig6_f37',date:'26.2.17',name:'에버랜드',amt:12000,cat:'여가/오락',type:'지출'},
+      {id:'mig6_f38',date:'26.2.17',name:'에버랜드',amt:10300,cat:'여가/오락',type:'지출'},
+      {id:'mig6_f39',date:'26.2.17',name:'풍년갈비',amt:80000,cat:'배달/외식',type:'지출'},
+      {id:'mig6_f40',date:'26.2.18',name:'래미안서초유니빌',amt:2000,cat:'통신/공과금',type:'지출'},
+      {id:'mig6_f41',date:'26.2.18',name:'비바리퍼블리카',amt:7390,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f42',date:'26.2.18',name:'비바리퍼블리카',amt:21790,cat:'쇼핑',type:'지출'},
+      {id:'mig6_f43',date:'26.2.18',name:'크라프카페',amt:20300,cat:'카페/간식',type:'지출'},
+      {id:'mig6_f44',date:'26.2.19',name:'비바리퍼블리카',amt:1900,cat:'카페/간식',type:'지출'},
+      {id:'mig6_f45',date:'26.2.19',name:'클라우드시큐리티',amt:1000,cat:'구독서비스',type:'지출'},
+      {id:'mig6_f46',date:'26.2.20',name:'신한라이프',amt:22720,cat:'보험',type:'지출'},
+      {id:'mig6_f47',date:'26.2.20',name:'NICE통신',amt:29000,cat:'통신/공과금',type:'지출'},
+      {id:'mig6_f48',date:'26.2.20',name:'AIA생명',amt:4507,cat:'보험',type:'지출'},
+      {id:'mig6_f49',date:'26.2.20',name:'AIA생명',amt:5500,cat:'보험',type:'지출'},
+    ];
+    febItems.forEach(item=>{ if(!feb.some(r=>r.id===item.id||(r.date===item.date&&r.name===item.name&&r.amt===item.amt))) feb.push(item); });
+    // 기존에 26.2.22 배민 15400이 있으면 26.2.24로 이동 (카드 명세서 기간 밖으로)
+    feb.forEach(r=>{ if(r.date==='26.2.22'&&r.name==='배민'&&r.amt===15400) r.date='26.2.24'; });
+    return data;
+  },
+};
+
+function loadData(){
+  // 기존 v2/v3 키로 저장된 데이터가 있으면 v1 키로 이전
+  ['budget_app_v2','budget_app_v3'].forEach(oldKey=>{
+    try{
+      const old=localStorage.getItem(oldKey);
+      if(old&&!localStorage.getItem(STORAGE_KEY)){
+        localStorage.setItem(STORAGE_KEY,old);
+        localStorage.removeItem(oldKey);
+      }
+    }catch(e){}
+  });
+
+  try{const s=localStorage.getItem(STORAGE_KEY);if(s)allData=JSON.parse(s);}catch(e){}
+
+  // 신규 달만 시드 (기존 데이터 절대 덮어쓰지 않음)
+  for(const [k,rows] of Object.entries(SEED)){
+    if(!allData[k]||allData[k].length===0){
+      allData[k]=rows.map((r,i)=>({...r,id:k+'_'+i}));
+    }
+  }
+
+  // 마이그레이션 (한 번만 실행)
+  const curVer=parseInt(localStorage.getItem(VER_KEY)||'1');
+  for(let v=curVer+1;v<=DATA_VER;v++){
+    if(MIGRATIONS[v]){ allData=MIGRATIONS[v](allData); }
+    localStorage.setItem(VER_KEY,String(v));
+  }
+
+  saveData();
+}
+function saveData(){
+  try{localStorage.setItem(STORAGE_KEY,JSON.stringify(allData));}catch(e){}
+  // Firebase 백업
+  if(window._fbBudgetRef){
+    window._fbBudgetRef.set(allData).catch(()=>{});
+  }
+}
+
+// ── Helpers ──────────────────────────────────────────────
+function mk(y,m){return `${y??curY}-${String(m??curM).padStart(2,'0')}`;}
+function fmt(n){return n.toLocaleString('ko-KR')+'원';}
+function fmtShort(n){
+  if(n>=10000)return (n/10000).toFixed(n%10000?1:0)+'만';
+  return n.toLocaleString('ko-KR');
+}
+function monthName(y,m){return `${y}년 ${m}월`;}
+function parseDate(str){
+  // '26.3.15' → {y:2026,m:3,d:15}
+  const p=str.split('.');
+  if(p.length<3)return null;
+  return {y:2000+parseInt(p[0]),m:parseInt(p[1]),d:parseInt(p[2])};
+}
+function toISO(str){
+  const p=parseDate(str);
+  if(!p)return '';
+  return `${p.y}-${String(p.m).padStart(2,'0')}-${String(p.d).padStart(2,'0')}`;
+}
+function fromISO(iso){
+  const [y,m,d]=iso.split('-');
+  return `${String(y).slice(2)}.${parseInt(m)}.${parseInt(d)}`;
+}
+function todayISO(){
+  const n=new Date();
+  return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+}
+
+function getMonthData(){
+  return (allData[mk()]||[]).slice();
+}
+function calcStats(rows){
+  const out=rows.filter(r=>r.type==='지출').reduce((s,r)=>s+r.amt,0);
+  const inc=rows.filter(r=>r.type==='수입').reduce((s,r)=>s+r.amt,0);
+  return {out,inc,net:out-inc};
+}
+
+// ── Tab switching ──────────────────────────────────────
+function switchTab(t){
+  curTab=t;
+  ['list','calendar','stats','compare'].forEach(id=>{
+    document.getElementById('view-'+id).style.display=t===id?'':'none';
+    document.getElementById('tab-'+id).classList.toggle('active',t===id);
+  });
+  render();
+}
+
+// ── Month navigation ──────────────────────────────────
+function setListMode(mode){
+  listMode=mode;
+  document.getElementById('mode-cal').style.background=mode==='cal'?'var(--bg3)':'var(--bg2)';
+  document.getElementById('mode-cal').style.color=mode==='cal'?'var(--text)':'var(--text2)';
+  document.getElementById('mode-bill').style.background=mode==='bill'?'var(--bg3)':'var(--bg2)';
+  document.getElementById('mode-bill').style.color=mode==='bill'?'var(--text)':'var(--text2)';
+  if(mode==='bill'){billY=curY;billM=curM;}
+  render();
+}
+function navPrev(){
+  if(listMode==='bill'&&curTab==='list'){
+    const r=subMonth(billY,billM); billY=r.y; billM=r.m; render();
+  } else changeMonth(-1);
+}
+function navNext(){
+  if(listMode==='bill'&&curTab==='list'){
+    const r=addMonth(billY,billM); billY=r.y; billM=r.m; render();
+  } else changeMonth(1);
+}
+function changeMonth(d){
+  curM+=d;
+  if(curM>12){curM=1;curY++;}
+  if(curM<1){curM=12;curY--;}
+  selDate=null;
+  render();
+}
+
+// ── Sort / Group ──────────────────────────────────────
+function setSort(s){
+  sortBy=s;
+  document.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active',b.id==='sort-'+s));
+  renderList();
+}
+function setGrouping(g){
+  groupBy=g;
+  document.getElementById('vbtn-cat').classList.toggle('active',g==='cat');
+  document.getElementById('vbtn-all').classList.toggle('active',g==='all');
+  renderList();
+}
+
+// ── Billing cycle helpers ─────────────────────────────
+// 날짜를 숫자로 변환해서 범위 비교 (e.g. 20260323)
+function dateNum(y,m,d){ return y*10000+m*100+d; }
+function parseDateNum(p){ return p?dateNum(p.y,p.m,p.d):0; }
+
+// startY/M/D ~ endY/M/D 포함(inclusive) 범위의 항목 반환
+function getRowsInRange(startY,startM,startD, endY,endM,endD){
+  const s=dateNum(startY,startM,startD), e=dateNum(endY,endM,endD);
+  const rows=[];
+  for(const v of Object.values(allData)){
+    v.forEach(r=>{
+      const p=parseDate(r.date);
+      if(!p) return;
+      const n=parseDateNum(p);
+      if(n>=s && n<=e) rows.push(r);
+    });
+  }
+  return rows;
+}
+
+// 월에 하루 더하기 (23 → 다음달 23)
+function addMonth(y,m){ m++; if(m>12){m=1;y++;} return {y,m}; }
+function subMonth(y,m){ m--; if(m<1){m=12;y--;} return {y,m}; }
+
+// viewY/viewM = 현재 보고있는 달 기준으로 청구 기간 계산
+function calcBillingPeriods(viewY, viewM){
+  const D=BILLING_CUTOFF+1; // 24
+  // 현재 보는 달의 청구 = (viewM-1)/24 ~ viewM/23
+  const {y:prevStartY,m:prevStartM}=subMonth(viewY,viewM);
+  const prevRows=getRowsInRange(prevStartY,prevStartM,D, viewY,viewM,BILLING_CUTOFF);
+
+  // 다음 달 청구 = viewM/24 ~ (viewM+1)/23
+  const {y:nextEndY,m:nextEndM}=addMonth(viewY,viewM);
+  const curRows=getRowsInRange(viewY,viewM,D, nextEndY,nextEndM,BILLING_CUTOFF);
+
+  const prevNet=calcStats(prevRows).net;
+  const curNet=calcStats(curRows).net;
+
+  const prevLabel=`${prevStartM}월 ${D}일 ~ ${viewM}월 ${BILLING_CUTOFF}일`;
+  const curLabel=`${viewM}월 ${D}일 ~ ${nextEndM}월 ${BILLING_CUTOFF}일`;
+
+  // 다음 청구가 아직 진행중인지
+  const today=new Date();
+  const todayNum=dateNum(today.getFullYear(),today.getMonth()+1,today.getDate());
+  const curEndNum=dateNum(nextEndY,nextEndM,BILLING_CUTOFF);
+  const isOngoing=todayNum<=curEndNum;
+  const remaining=getRemainingDays(nextEndY,nextEndM,BILLING_CUTOFF);
+
+  return {prevRows,curRows,prevNet,curNet,prevLabel,curLabel,
+          nextEndY,nextEndM,D,isOngoing,remaining};
+}
+
+function renderBilling(){
+  const b=calcBillingPeriods(curY,curM);
+
+  // 배너 (내역 탭)
+  const banner=document.getElementById('billingBanner');
+  if(banner){
+    banner.innerHTML=`
+      <div class="billing-col">
+        <div class="billing-col-label">💳 지난 청구</div>
+        <div class="billing-col-period">${b.prevLabel}</div>
+        <div class="billing-col-val" style="color:var(--danger);">${fmt(b.prevNet)}</div>
+        <div class="billing-col-sub">${b.prevRows.length}건</div>
+      </div>
+      <div class="billing-col">
+        <div class="billing-col-label">${b.isOngoing?'📅 다음 청구 진행중':'📅 다음 청구'}</div>
+        <div class="billing-col-period">${b.curLabel}</div>
+        <div class="billing-col-val" style="color:var(--accent);">${fmt(b.curNet)}</div>
+        <div class="billing-col-sub">${b.curRows.length}건${b.isOngoing?` · 마감까지 ${b.remaining}일`:''}</div>
+      </div>`;
+  }
+
+  // 통계 탭 카드
+  const sc=document.getElementById('statsBillingCard');
+  if(sc){
+    // 그룹별 breakdown
+    const expCur=b.curRows.filter(r=>r.type==='지출');
+    let grpHtml='';
+    SPEND_GROUPS.forEach(g=>{
+      const amt=expCur.filter(r=>g.cats.includes(r.cat)).reduce((s,r)=>s+r.amt,0);
+      const prevAmt=b.prevRows.filter(r=>r.type==='지출'&&g.cats.includes(r.cat)).reduce((s,r)=>s+r.amt,0);
+      if(amt===0&&prevAmt===0) return;
+      const diff=prevAmt>0?Math.round((amt-prevAmt)/prevAmt*100):null;
+      grpHtml+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border2);">
+        <span style="font-size:14px;">${g.icon}</span>
+        <div style="flex:1;font-size:12px;color:var(--text2);">${g.label}</div>
+        <div style="font-size:12px;color:var(--text3);">지난 ${fmt(prevAmt)}</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text);min-width:80px;text-align:right;">${fmt(amt)}</div>
+        ${diff!==null?`<div style="font-size:11px;min-width:38px;text-align:right;color:${diff>0?'var(--danger)':'var(--success)'};">${diff>0?'▲':'▼'}${Math.abs(diff)}%</div>`:''}
+      </div>`;
+    });
+
+    sc.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:14px;font-weight:600;">💳 카드 청구</div>
+        <div style="font-size:11px;color:var(--text3);">기준일: 매월 ${BILLING_CUTOFF}일</div>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;">
+        <div style="flex:1;background:var(--bg3);border-radius:10px;padding:12px;">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px;">지난 청구 (결제완료)</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">${b.prevLabel}</div>
+          <div style="font-size:20px;font-weight:700;color:var(--danger);">${fmt(b.prevNet)}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px;">${b.prevRows.length}건</div>
+        </div>
+        <div style="flex:1;background:var(--bg3);border-radius:10px;padding:12px;border:1px solid var(--accent)44;">
+          <div style="font-size:10px;color:var(--accent);margin-bottom:4px;">이번 청구 (진행중)</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;">${b.curLabel}</div>
+          <div style="font-size:20px;font-weight:700;color:var(--accent);">${fmt(b.curNet)}</div>
+          <div style="font-size:10px;color:var(--text3);margin-top:3px;">${b.curRows.length}건${b.isOngoing?` · 마감까지 ${b.remaining}일`:''}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:8px;font-weight:500;">이번 청구 카테고리별</div>
+      ${grpHtml||'<div style="font-size:12px;color:var(--text3);">항목 없음</div>'}`;
+  }
+}
+
+function getRemainingDays(refY, endM, cutoffDay){
+  const today=new Date();
+  let endY=refY;
+  const target=new Date(endY, endM-1, cutoffDay);
+  const diff=Math.ceil((target-today)/(1000*60*60*24));
+  return Math.max(0,diff);
+}
+
+// ── Render dispatch ──────────────────────────────────
+function render(){
+  updateMonthLabels();
+  renderBilling();
+  if(curTab==='list') renderList();
+  else if(curTab==='calendar') renderCalendar();
+  else if(curTab==='stats') renderStats();
+  else if(curTab==='compare') renderCompare();
+}
+
+function updateMonthLabels(){
+  // 캘린더/통계 탭은 항상 달 기준
+  ['calMonthLabel','statsMonthLabel'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.textContent=monthName(curY,curM);
+  });
+  // 내역 탭: 모드에 따라 라벨 변경
+  const listEl=document.getElementById('listMonthLabel');
+  if(listEl){
+    if(listMode==='bill'){
+      const {sY,sM,sD,eY,eM,eD}=getBillRange(billY,billM);
+      listEl.textContent=`${sM}/${sD} ~ ${eM}/${eD} 청구`;
+    } else {
+      listEl.textContent=monthName(curY,curM);
+    }
+  }
+  document.getElementById('headerSub').textContent=`${curY}년 ${curM}월 기준`;
+}
+
+// 청구월(endM)의 청구 기간 반환: (전달 cutoff+1일 ~ 이달 cutoff일)
+function getBillRange(eY,eM){
+  const {y:sY,m:sM}=subMonth(eY,eM);
+  return {sY,sM,sD:BILLING_CUTOFF+1, eY,eM,eD:BILLING_CUTOFF};
+}
+
+// ── List View ──────────────────────────────────────────
+function sortedRows(rows){
+  return [...rows].sort((a,b)=>{
+    if(sortBy==='date'){
+      const da=parseDate(a.date),db=parseDate(b.date);
+      if(!da||!db)return 0;
+      const ta=da.y*10000+da.m*100+da.d, tb=db.y*10000+db.m*100+db.d;
+      return tb-ta;
+    }
+    if(sortBy==='amt') return b.amt-a.amt;
+    if(sortBy==='cat') return CAT_ORDER.indexOf(a.cat)-CAT_ORDER.indexOf(b.cat);
+    return 0;
+  });
+}
+
+function getListRows(){
+  if(listMode==='bill'){
+    const {sY,sM,sD,eY,eM,eD}=getBillRange(billY,billM);
+    return getRowsInRange(sY,sM,sD,eY,eM,eD);
+  }
+  return getMonthData();
+}
+
+function renderList(){
+  const rows=getListRows();
+  const {out,inc,net}=calcStats(rows);
+  document.getElementById('l-out').textContent=fmt(out);
+  document.getElementById('l-in').textContent=fmt(inc);
+  const netEl=document.getElementById('l-net');
+  netEl.textContent=fmt(net);
+  netEl.className='card-value'+(net>800000?' danger':'');
+
+  if(listMode==='bill'){
+    const {sY,sM,sD,eY,eM,eD}=getBillRange(billY,billM);
+    document.getElementById('l-daily').textContent=`${sM}월 ${sD}일 ~ ${eM}월 ${eD}일 · ${rows.length}건`;
+  } else {
+    const daysInMonth=new Date(curY,curM,0).getDate();
+    const day=Math.min(new Date().getDate(),daysInMonth);
+    document.getElementById('l-daily').textContent=`하루 평균 ${fmt(Math.round(net/day))}`;
+  }
+
+  const body=document.getElementById('listBody');
+  if(rows.length===0){body.innerHTML='<div class="empty">내역이 없습니다.</div>';return;}
+
+  if(groupBy==='cat'){
+    renderListByCat(rows, body);
+  } else {
+    renderListAll(rows, body);
+  }
+}
+
+function renderListByCat(rows, body){
+  const expRows=rows.filter(r=>r.type==='지출');
+  const totalOut=expRows.reduce((s,r)=>s+r.amt,0);
+
+  // Group
+  const groups={};
+  CAT_ORDER.forEach(c=>groups[c]=[]);
+  rows.forEach(r=>{
+    if(!groups[r.cat])groups[r.cat]=[];
+    groups[r.cat].push(r);
+  });
+
+  let html='';
+  CAT_ORDER.forEach(cat=>{
+    const gr=groups[cat];
+    if(!gr||gr.length===0)return;
+    const sid='cat_'+cat.replace(/\//g,'_');
+    const catOut=gr.filter(r=>r.type==='지출').reduce((s,r)=>s+r.amt,0);
+    const catIn=gr.filter(r=>r.type==='수입').reduce((s,r)=>s+r.amt,0);
+    const pct=totalOut>0?Math.round(catOut/totalOut*100):0;
+    const open=secState[sid]!==false;
+
+    html+=`<div class="cat-section">
+      <div class="cat-header" onclick="toggleSec('${sid}')">
+        <div class="cat-dot" style="background:${CAT_COLORS[cat]||'#888'}"></div>
+        <div class="cat-title">${cat}</div>
+        <div class="cat-total">${fmt(catOut)}</div>
+        <div class="cat-count">(${gr.length}건)</div>
+        <div class="cat-chevron" id="chev-${sid}" style="transform:${open?'':'rotate(-90deg)'}"">▼</div>
+      </div>
+      <div class="cat-bar-wrap">
+        <div class="cat-bar-bg"><div class="cat-bar" style="width:${pct}%;background:${CAT_COLORS[cat]||'#888'}"></div></div>
+      </div>
+      <div id="sb-${sid}" style="display:${open?'':'none'}">`;
+
+    sortedRows(gr).forEach(r=>{
+      const iso=toISO(r.date);
+      const p=parseDate(r.date);
+      const dateStr=p?`${p.m}/${p.d}`:'';
+      html+=`<div class="item-row">
+        <div class="item-date">${dateStr}</div>
+        <div class="item-name">${esc(r.name)}</div>
+        <div class="item-amt ${r.type==='수입'?'plus':'minus'}">${r.type==='수입'?'+':'-'}${fmt(r.amt)}</div>
+        <div class="item-actions">
+          <button class="action-btn" onclick="openEdit('${r.id}')">수정</button>
+          <button class="action-btn del" onclick="deleteEntry('${r.id}')">삭제</button>
+        </div>
+      </div>`;
+    });
+
+    if(catIn>0){
+      html+=`<div style="padding:6px 16px;font-size:11px;color:var(--success);">환급/할인 -${fmt(catIn)}</div>`;
+    }
+    html+=`</div></div>`;
+  });
+  body.innerHTML=html||'<div class="empty">내역 없음</div>';
+}
+
+function renderListAll(rows, body){
+  const sorted=sortedRows(rows);
+  let html='<div class="cat-section">';
+  sorted.forEach(r=>{
+    const p=parseDate(r.date);
+    const dateStr=p?`${p.m}/${p.d}`:'';
+    html+=`<div class="item-row">
+      <div class="item-date">${dateStr}</div>
+      <div class="item-name">
+        <span class="cat-dot" style="background:${CAT_COLORS[r.cat]||'#888'};display:inline-block;margin-right:5px;"></span>
+        ${esc(r.name)}
+      </div>
+      <div style="font-size:11px;color:var(--text3);white-space:nowrap;">${r.cat}</div>
+      <div class="item-amt ${r.type==='수입'?'plus':'minus'}">${r.type==='수입'?'+':'-'}${fmt(r.amt)}</div>
+      <div class="item-actions">
+        <button class="action-btn" onclick="openEdit('${r.id}')">수정</button>
+        <button class="action-btn del" onclick="deleteEntry('${r.id}')">삭제</button>
+      </div>
+    </div>`;
+  });
+  html+='</div>';
+  body.innerHTML=html;
+}
+
+function toggleSec(sid){
+  secState[sid]=secState[sid]===false?true:false;
+  const sb=document.getElementById('sb-'+sid);
+  const chev=document.getElementById('chev-'+sid);
+  if(sb)sb.style.display=secState[sid]===false?'none':'';
+  if(chev)chev.style.transform=secState[sid]===false?'rotate(-90deg)':'';
+}
+
+let allOpen=true;
+function toggleAllSections(){
+  allOpen=!allOpen;
+  CAT_ORDER.forEach(cat=>{
+    const sid='cat_'+cat.replace(/\//g,'_');
+    secState[sid]=allOpen?true:false;
+    const sb=document.getElementById('sb-'+sid);
+    const chev=document.getElementById('chev-'+sid);
+    if(sb)sb.style.display=allOpen?'':'none';
+    if(chev)chev.style.transform=allOpen?'':'rotate(-90deg)';
+  });
+  const btn=document.getElementById('toggleAllBtn');
+  if(btn)btn.textContent=allOpen?'전체 닫기':'전체 열기';
+}
+
+// ── Calendar View ──────────────────────────────────────
+function renderCalendar(){
+  const rows=getMonthData();
+  document.getElementById('calMonthLabel').textContent=monthName(curY,curM);
+
+  // Build day map
+  const dayMap={};
+  rows.forEach(r=>{
+    const p=parseDate(r.date);
+    if(!p)return;
+    const k=p.d;
+    if(!dayMap[k])dayMap[k]={out:0,inc:0,items:[]};
+    if(r.type==='지출')dayMap[k].out+=r.amt;
+    else dayMap[k].inc+=r.amt;
+    dayMap[k].items.push(r);
+  });
+
+  const firstDay=new Date(curY,curM-1,1).getDay();
+  const daysInMonth=new Date(curY,curM,0).getDate();
+  const prevDays=new Date(curY,curM-1,0).getDate();
+  const today=new Date();
+  const todayKey=`${today.getFullYear()}-${today.getMonth()+1}-${today.getDate()}`;
+
+  let html='';
+  let total=firstDay+daysInMonth;
+  const cells=total<=35?35:42;
+
+  for(let i=0;i<cells;i++){
+    let d,isOther=false,y=curY,m=curM;
+    if(i<firstDay){d=prevDays-firstDay+i+1;isOther=true;m=curM-1;if(m<1){m=12;y--;}}
+    else if(i>=firstDay+daysInMonth){d=i-firstDay-daysInMonth+1;isOther=true;m=curM+1;if(m>13){m=1;y++;}}
+    else{d=i-firstDay+1;}
+
+    const dow=i%7;
+    const isToday=!isOther&&`${curY}-${curM}-${d}`===todayKey;
+    const isSel=!isOther&&selDate===d;
+    const dm=dayMap[d];
+
+    let cls='cal-cell';
+    if(isOther)cls+=' other-month';
+    if(isToday)cls+=' today';
+    if(isSel)cls+=' selected';
+    if(dow===0)cls+=' sun';
+    if(dow===6)cls+=' sat';
+
+    const clickFn=isOther?'':`onclick="selectDay(${d})"`;
+    html+=`<div class="${cls}" ${clickFn}>`;
+    html+=`<div class="cal-date">${d}</div>`;
+    if(dm&&!isOther){
+      if(dm.out>0)html+=`<div class="cal-amt">-${fmtShort(dm.out)}</div>`;
+      if(dm.inc>0)html+=`<div class="cal-in">+${fmtShort(dm.inc)}</div>`;
+      // category dots
+      const cats=[...new Set(dm.items.map(r=>r.cat))].slice(0,4);
+      html+=`<div class="cal-dots">`;
+      cats.forEach(c=>html+=`<div class="cal-dot" style="background:${CAT_COLORS[c]||'#888'}"></div>`);
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+  }
+  document.getElementById('calGrid').innerHTML=html;
+
+  if(selDate&&dayMap[selDate]){
+    renderDayDetail(selDate,dayMap[selDate].items);
+  } else {
+    document.getElementById('dayDetail').style.display='none';
+  }
+}
+
+function selectDay(d){
+  selDate=selDate===d?null:d;
+  renderCalendar();
+}
+
+function renderDayDetail(d,items){
+  const el=document.getElementById('dayDetail');
+  el.style.display='';
+  const total=items.filter(r=>r.type==='지출').reduce((s,r)=>s+r.amt,0);
+  let html=`<div class="day-detail">
+    <div class="day-detail-title">
+      <span>${curM}월 ${d}일 • ${fmt(total)}</span>
+      <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px;" onclick="openAddDate(${d})">+ 추가</button>
+    </div>`;
+  items.forEach(r=>{
+    html+=`<div class="day-item">
+      <div class="day-cat-dot" style="background:${CAT_COLORS[r.cat]||'#888'}"></div>
+      <div class="day-name">${esc(r.name)}</div>
+      <div class="day-amt" style="color:${r.type==='수입'?'var(--success)':'var(--text)'}">${r.type==='수입'?'+':'-'}${fmt(r.amt)}</div>
+      <div class="day-actions">
+        <button class="action-btn" onclick="openEdit('${r.id}')">수정</button>
+        <button class="action-btn del" onclick="deleteEntry('${r.id}')">삭제</button>
+      </div>
+    </div>`;
+  });
+  html+=`</div>`;
+  el.innerHTML=html;
+}
+
+// ── Stats View ──────────────────────────────────────────
+function renderStats(){
+  const rows=getMonthData();
+  const {out,inc,net}=calcStats(rows);
+
+  document.getElementById('s-this').textContent=fmt(net);
+
+  // prev month
+  let pm=curM-1,py=curY;
+  if(pm<1){pm=12;py--;}
+  const prevRows=allData[mk(py,pm)]||[];
+  const prevNet=calcStats(prevRows).net;
+  const diff=net-prevNet;
+  const diffEl=document.getElementById('s-diff');
+  diffEl.textContent=(diff>=0?'+':'')+fmt(diff);
+  diffEl.className='card-value'+(diff>0?' danger':' success');
+  document.getElementById('s-diff-sub').textContent=diff>0?'전달보다 더 씀':'전달보다 절약';
+
+  // top cat
+  const catTotals={};
+  rows.filter(r=>r.type==='지출').forEach(r=>{catTotals[r.cat]=(catTotals[r.cat]||0)+r.amt;});
+  const sortedCats=Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+  document.getElementById('s-top').textContent=sortedCats[0]?sortedCats[0][0]+' '+fmt(sortedCats[0][1]):'없음';
+
+  const daysInMonth=new Date(curY,curM,0).getDate();
+  const day=Math.min(new Date().getDate(),daysInMonth);
+  document.getElementById('s-daily').textContent=fmt(Math.round(net/day));
+
+  // Category ranking bars
+  const totalOut=out;
+  let rankHtml='';
+  sortedCats.slice(0,8).forEach(([cat,amt],i)=>{
+    const pct=totalOut>0?Math.round(amt/totalOut*100):0;
+    rankHtml+=`<div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);">
+          <div style="width:8px;height:8px;border-radius:50%;background:${CAT_COLORS[cat]||'#888'}"></div>
+          ${cat}
+        </div>
+        <div style="font-size:12px;font-weight:600;color:var(--text);">${fmt(amt)} <span style="color:var(--text3);font-weight:400;">(${pct}%)</span></div>
+      </div>
+      <div class="cat-bar-bg" style="height:6px;">
+        <div class="cat-bar" style="width:${pct}%;background:${CAT_COLORS[cat]||'#888'}"></div>
+      </div>
+    </div>`;
+  });
+  document.getElementById('catRanking').innerHTML=rankHtml;
+
+  // Spend groups
+  renderSpendGroups(rows, out);
+
+  // Charts
+  renderPieChart(catTotals);
+  renderBarChart();
+  renderLineChart();
+}
+
+const SPEND_GROUPS=[
+  {
+    key:'food',
+    label:'식비',
+    icon:'🍽️',
+    desc:'배달/외식 · 카페/간식 · 식료품/마트',
+    cats:['배달/외식','카페/간식','식료품/마트'],
+    color:'#E24B4A',
+    tip:'줄이기 가능'
+  },
+  {
+    key:'leisure',
+    label:'소비/쇼핑',
+    icon:'🛍️',
+    desc:'쇼핑 · 여가/오락 · 상품권/포인트 · 선물/경조사 · 기타',
+    cats:['쇼핑','여가/오락','상품권/포인트','선물/경조사','기타'],
+    color:'#D4537E',
+    tip:'줄이기 가능'
+  },
+  {
+    key:'fixed',
+    label:'고정지출',
+    icon:'🔒',
+    desc:'통신/공과금 · 보험 · 교통 · 구독서비스 · 의료/건강',
+    cats:['통신/공과금','보험','교통','구독서비스','의료/건강'],
+    color:'#7F77DD',
+    tip:'줄이기 어려움'
+  },
+];
+
+function renderSpendGroups(rows, totalOut){
+  const expRows=rows.filter(r=>r.type==='지출');
+  // 그룹별 합계
+  const groupTotals=SPEND_GROUPS.map(g=>{
+    const amt=expRows.filter(r=>g.cats.includes(r.cat)).reduce((s,r)=>s+r.amt,0);
+    return {...g, amt};
+  });
+  const grandTotal=groupTotals.reduce((s,g)=>s+g.amt,0)||1;
+
+  // 전달 그룹 합계
+  let pm=curM-1,py=curY;
+  if(pm<1){pm=12;py--;}
+  const prevExpRows=(allData[mk(py,pm)]||[]).filter(r=>r.type==='지출');
+
+  let html='';
+
+  // 가로 비율 바 (전체)
+  html+=`<div style="display:flex;height:18px;border-radius:8px;overflow:hidden;margin-bottom:20px;gap:2px;">`;
+  groupTotals.forEach(g=>{
+    const pct=Math.round(g.amt/grandTotal*100);
+    html+=`<div style="flex:${g.amt};background:${g.color};display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:600;min-width:${pct>5?'0':'0'}px;" title="${g.label} ${pct}%">${pct>8?pct+'%':''}</div>`;
+  });
+  html+=`</div>`;
+
+  // 그룹 카드
+  groupTotals.forEach(g=>{
+    const pct=grandTotal>0?Math.round(g.amt/grandTotal*100):0;
+    const prevAmt=prevExpRows.filter(r=>g.cats.includes(r.cat)).reduce((s,r)=>s+r.amt,0);
+    const diff=g.amt-prevAmt;
+    const diffStr=prevAmt>0?(diff>=0?`▲ ${fmt(diff)}`:`▼ ${fmt(Math.abs(diff))}`): '';
+    const diffColor=diff>0?'var(--danger)':'var(--success)';
+
+    // 세부 카테고리 breakdown
+    const catBreakdown=g.cats.map(cat=>{
+      const amt=expRows.filter(r=>r.cat===cat).reduce((s,r)=>s+r.amt,0);
+      return {cat,amt};
+    }).filter(x=>x.amt>0).sort((a,b)=>b.amt-a.amt);
+
+    html+=`<div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <span style="font-size:18px;">${g.icon}</span>
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:600;color:var(--text);">${g.label}</div>
+          <div style="font-size:11px;color:var(--text3);">${g.tip}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:17px;font-weight:700;color:${g.color};">${fmt(g.amt)}</div>
+          <div style="font-size:11px;color:var(--text3);">전체의 ${pct}%
+            ${diffStr?`<span style="color:${diffColor};margin-left:4px;">${diffStr}</span>`:''}
+          </div>
+        </div>
+      </div>
+      <div class="cat-bar-bg" style="height:5px;margin-bottom:10px;">
+        <div class="cat-bar" style="width:${pct}%;background:${g.color};"></div>
+      </div>`;
+
+    // 세부 항목 작은 줄
+    if(catBreakdown.length>0){
+      html+=`<div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+      catBreakdown.forEach(({cat,amt})=>{
+        const cp=g.amt>0?Math.round(amt/g.amt*100):0;
+        html+=`<div style="background:var(--bg4);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--text2);display:flex;align-items:center;gap:5px;">
+          <span style="width:6px;height:6px;border-radius:50%;background:${CAT_COLORS[cat]||'#888'};display:inline-block;"></span>
+          ${cat} <span style="color:var(--text3);">${fmtShort(amt)} (${cp}%)</span>
+        </div>`;
+      });
+      html+=`</div>`;
+    }
+    html+=`</div>`;
+  });
+
+  document.getElementById('spendGroups').innerHTML=html;
+}
+
+function renderPieChart(catTotals){
+  const ctx=document.getElementById('pieChart').getContext('2d');
+  if(charts.pie)charts.pie.destroy();
+  const labels=Object.keys(catTotals);
+  const data=Object.values(catTotals);
+  const colors=labels.map(c=>CAT_COLORS[c]||'#888');
+  charts.pie=new Chart(ctx,{
+    type:'doughnut',
+    data:{labels,datasets:[{data,backgroundColor:colors,borderColor:'transparent',borderWidth:0}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.label}: ${fmt(ctx.raw)}`}}},
+      cutout:'60%'
+    }
+  });
+  const leg=document.getElementById('pieLegend');
+  leg.innerHTML=labels.map((l,i)=>`<div class="leg-item"><div class="leg-dot" style="background:${colors[i]}"></div>${l}</div>`).join('');
+}
+
+function renderBarChart(){
+  const months=[];
+  const vals=[];
+  for(let i=5;i>=0;i--){
+    let m=curM-i,y=curY;
+    while(m<1){m+=12;y--;}
+    const k=mk(y,m);
+    const r=allData[k]||[];
+    const {net}=calcStats(r);
+    months.push(`${y}년 ${m}월`);
+    vals.push(net);
+  }
+  const ctx=document.getElementById('barChart').getContext('2d');
+  if(charts.bar)charts.bar.destroy();
+  charts.bar=new Chart(ctx,{
+    type:'bar',
+    data:{labels:months,datasets:[{label:'실지출',data:vals,backgroundColor:'#6c6cff99',borderColor:'#6c6cff',borderWidth:1,borderRadius:6}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`실지출: ${fmt(c.raw)}`}}},
+      scales:{
+        x:{ticks:{color:'#5c5c6e',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{ticks:{color:'#5c5c6e',font:{size:10},callback:v=>fmtShort(v)},grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+}
+
+function renderLineChart(){
+  const months=[],labels=[];
+  for(let i=5;i>=0;i--){
+    let m=curM-i,y=curY;
+    while(m<1){m+=12;y--;}
+    months.push({y,m,k:mk(y,m)});
+    labels.push(`${m}월`);
+  }
+  // top 4 cats of current month
+  const curRows=getMonthData();
+  const catTotals={};
+  curRows.filter(r=>r.type==='지출').forEach(r=>{catTotals[r.cat]=(catTotals[r.cat]||0)+r.amt;});
+  const top4=Object.entries(catTotals).sort((a,b)=>b[1]-a[1]).slice(0,4).map(e=>e[0]);
+
+  const datasets=top4.map(cat=>({
+    label:cat,
+    data:months.map(({k})=>{
+      const r=(allData[k]||[]).filter(e=>e.cat===cat&&e.type==='지출');
+      return r.reduce((s,e)=>s+e.amt,0);
+    }),
+    borderColor:CAT_COLORS[cat]||'#888',
+    backgroundColor:'transparent',
+    borderWidth:2,
+    pointRadius:3,
+    tension:0.3
+  }));
+
+  const ctx=document.getElementById('lineChart').getContext('2d');
+  if(charts.line)charts.line.destroy();
+  charts.line=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmt(c.raw)}`}}},
+      scales:{
+        x:{ticks:{color:'#5c5c6e',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{ticks:{color:'#5c5c6e',font:{size:10},callback:v=>fmtShort(v)},grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+  const leg=document.getElementById('lineLegend');
+  leg.innerHTML=top4.map(c=>`<div class="leg-item"><div class="leg-dot" style="background:${CAT_COLORS[c]||'#888'}"></div>${c}</div>`).join('');
+}
+
+// ── Compare View ──────────────────────────────────────
+function renderCompare(){
+  // All months that have data, sorted chronologically
+  const months=Object.keys(allData)
+    .filter(k=>allData[k]&&allData[k].length>0)
+    .sort()
+    .map(k=>{
+      const [y,m]=k.split('-').map(Number);
+      return {y,m,k,label:`${y}년 ${m}월`};
+    });
+
+  // Compare bar
+  const vals=months.map(({k})=>calcStats(allData[k]||[]).net);
+  const ctx=document.getElementById('compareBar').getContext('2d');
+  if(charts.compare)charts.compare.destroy();
+  const maxVal=Math.max(...vals,1);
+  charts.compare=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:months.map(x=>`${x.m}월`),
+      datasets:[{
+        label:'실지출',
+        data:vals,
+        backgroundColor:months.map(x=>x.k===mk(curY,curM)?'#6c6cff':'#6c6cff55'),
+        borderColor:months.map(x=>x.k===mk(curY,curM)?'#6c6cff':'#6c6cff88'),
+        borderWidth:1,borderRadius:6
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`실지출: ${fmt(c.raw)}`}}},
+      scales:{
+        x:{ticks:{color:'#5c5c6e',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}},
+        y:{ticks:{color:'#5c5c6e',font:{size:10},callback:v=>fmtShort(v)},grid:{color:'rgba(255,255,255,0.04)'}}
+      }
+    }
+  });
+
+  // Cat compare table
+  let tableHtml=`<table class="compare-table">
+    <thead><tr><th>카테고리</th>`;
+  months.forEach(({label,m})=>tableHtml+=`<th class="num">${m}월</th>`);
+  tableHtml+=`</tr></thead><tbody>`;
+
+  CAT_ORDER.forEach(cat=>{
+    const hasAny=months.some(({k})=>(allData[k]||[]).some(r=>r.cat===cat&&r.type==='지출'));
+    if(!hasAny)return;
+    tableHtml+=`<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${CAT_COLORS[cat]||'#888'};margin-right:6px;"></span>${cat}</td>`;
+    months.forEach(({k})=>{
+      const v=(allData[k]||[]).filter(r=>r.cat===cat&&r.type==='지출').reduce((s,r)=>s+r.amt,0);
+      tableHtml+=`<td class="num" style="color:${v>0?'var(--text)':'var(--text3)'}">${v>0?fmtShort(v)+' ':'-'}</td>`;
+    });
+    tableHtml+=`</tr>`;
+  });
+
+  // Total row
+  tableHtml+=`<tr style="font-weight:600;border-top:1px solid var(--border);"><td>합계</td>`;
+  months.forEach(({k})=>{
+    const v=calcStats(allData[k]||[]).net;
+    tableHtml+=`<td class="num" style="color:var(--danger)">${fmtShort(v)}</td>`;
+  });
+  tableHtml+=`</tr></tbody></table>`;
+  document.getElementById('catCompareTable').innerHTML=tableHtml;
+
+  // Monthly summary table
+  let sumHtml=`<table class="compare-table">
+    <thead><tr><th>월</th><th class="num">지출</th><th class="num">환급</th><th class="num">실지출</th><th>추이</th></tr></thead>
+    <tbody>`;
+  const maxV=Math.max(...vals,1);
+  months.forEach(({label,k,m},i)=>{
+    const {out,inc,net}=calcStats(allData[k]||[]);
+    const pct=Math.round(net/maxV*100);
+    sumHtml+=`<tr>
+      <td>${label}</td>
+      <td class="num" style="color:var(--danger)">${fmt(out)}</td>
+      <td class="num" style="color:var(--success)">${fmt(inc)}</td>
+      <td class="num" style="font-weight:600;">${fmt(net)}</td>
+      <td class="compare-bar-cell"><div class="mini-bar-bg"><div class="mini-bar" style="width:${pct}%"></div></div></td>
+    </tr>`;
+  });
+  sumHtml+=`</tbody></table>`;
+  document.getElementById('monthlyTable').innerHTML=sumHtml;
+
+  // 그룹별 월 비교
+  let grpHtml='';
+  SPEND_GROUPS.forEach(g=>{
+    const vals=months.map(({k})=>{
+      const rows=(allData[k]||[]).filter(r=>r.type==='지출'&&g.cats.includes(r.cat));
+      return rows.reduce((s,r)=>s+r.amt,0);
+    });
+    const maxG=Math.max(...vals,1);
+
+    grpHtml+=`<div style="margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span style="font-size:15px;">${g.icon}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text);">${g.label}</span>
+        <span style="font-size:11px;color:var(--text3);">${g.tip}</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:flex-end;height:80px;">`;
+
+    vals.forEach((v,i)=>{
+      const barH=maxG>0?Math.round(v/maxG*80):0;
+      const isCur=months[i].k===mk(curY,curM);
+      grpHtml+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;">
+        <div style="font-size:10px;color:${v>0?'var(--text2)':'var(--text3)'};font-variant-numeric:tabular-nums;">${v>0?fmtShort(v):''}</div>
+        <div style="width:100%;background:${isCur?g.color:g.color+'55'};border-radius:4px 4px 0 0;height:${barH}px;min-height:${v>0?2:0}px;transition:height .3s;"></div>
+        <div style="font-size:10px;color:${isCur?'var(--text)':'var(--text3)'};">${months[i].m}월</div>
+      </div>`;
+    });
+
+    grpHtml+=`</div>`;
+
+    // 수치 테이블
+    grpHtml+=`<div style="display:flex;gap:0;margin-top:6px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">`;
+    vals.forEach((v,i)=>{
+      const isCur=months[i].k===mk(curY,curM);
+      const prev=i>0?vals[i-1]:null;
+      const diff=prev!=null&&prev>0?v-prev:null;
+      grpHtml+=`<div style="flex:1;text-align:center;padding:6px 2px;background:${isCur?'var(--bg3)':'transparent'};border-right:1px solid var(--border2);">
+        <div style="font-size:11px;font-weight:${isCur?600:400};color:${v>0?'var(--text)':'var(--text3)'};">${v>0?fmtShort(v):'-'}</div>
+        ${diff!=null&&v>0?`<div style="font-size:9px;color:${diff>0?'var(--danger)':'var(--success)'};">${diff>0?'▲':'▼'}${fmtShort(Math.abs(diff))}</div>`:'<div style="font-size:9px;color:transparent;">-</div>'}
+      </div>`;
+    });
+    grpHtml+=`</div></div>`;
+  });
+
+  document.getElementById('groupCompareTable').innerHTML=grpHtml;
+}
+
+// ── Modal (Add/Edit) ──────────────────────────────────
+function openAdd(){
+  editId=null;editKey=null;
+  document.getElementById('modalTitle').textContent='내역 추가';
+  document.getElementById('mDate').value=`${curY}-${String(curM).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
+  document.getElementById('mName').value='';
+  document.getElementById('mAmt').value='';
+  document.getElementById('mCat').value='배달/외식';
+  document.getElementById('mType').value='지출';
+  document.getElementById('modalDelBtn').style.display='none';
+  document.getElementById('modalOverlay').style.display='flex';
+  document.getElementById('mName').focus();
+}
+
+function openAddDate(d){
+  openAdd();
+  document.getElementById('mDate').value=`${curY}-${String(curM).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function openEdit(id){
+  // Find entry
+  let found=null,foundKey=null;
+  for(const [k,rows] of Object.entries(allData)){
+    const r=rows.find(x=>x.id==id);
+    if(r){found=r;foundKey=k;break;}
+  }
+  if(!found)return;
+  editId=id;editKey=foundKey;
+  document.getElementById('modalTitle').textContent='내역 수정';
+  document.getElementById('mDate').value=toISO(found.date)||`${curY}-${String(curM).padStart(2,'0')}-01`;
+  document.getElementById('mName').value=found.name;
+  document.getElementById('mAmt').value=found.amt;
+  document.getElementById('mCat').value=found.cat;
+  document.getElementById('mType').value=found.type;
+  document.getElementById('modalDelBtn').style.display='';
+  document.getElementById('modalOverlay').style.display='flex';
+}
+
+function autoType(){
+  const cat=document.getElementById('mCat').value;
+  document.getElementById('mType').value=cat==='환급/할인'?'수입':'지출';
+}
+
+function closeModal(e){
+  if(e.target===document.getElementById('modalOverlay'))closeModalDirect();
+}
+function closeModalDirect(){
+  document.getElementById('modalOverlay').style.display='none';
+}
+
+function saveModal(){
+  const dateVal=document.getElementById('mDate').value;
+  const name=document.getElementById('mName').value.trim();
+  const amt=parseInt(document.getElementById('mAmt').value);
+  const cat=document.getElementById('mCat').value;
+  const type=document.getElementById('mType').value;
+  if(!name||!amt||amt<=0){toast('내용과 금액을 입력하세요');return;}
+
+  const dateStr=fromISO(dateVal);
+  // Determine which month
+  const [y,m]=dateVal.split('-').map(Number);
+  const key=`${y}-${String(m).padStart(2,'0')}`;
+
+  if(editId){
+    // edit
+    if(editKey&&allData[editKey]){
+      const idx=allData[editKey].findIndex(x=>x.id==editId);
+      if(idx>=0){
+        if(editKey!==key){
+          allData[editKey].splice(idx,1);
+          if(!allData[key])allData[key]=[];
+          allData[key].push({date:dateStr,name,amt,cat,type,id:editId});
+        } else {
+          Object.assign(allData[editKey][idx],{date:dateStr,name,amt,cat,type});
+        }
+      }
+    }
+    toast('수정됨');
+  } else {
+    if(!allData[key])allData[key]=[];
+    allData[key].push({date:dateStr,name,amt,cat,type,id:'u_'+Date.now()});
+    toast('추가됨');
+  }
+
+  saveData();
+  closeModalDirect();
+  render();
+}
+
+function deleteModalEntry(){
+  if(!editId||!editKey)return;
+  allData[editKey]=allData[editKey].filter(x=>x.id!=editId);
+  saveData();
+  closeModalDirect();
+  toast('삭제됨');
+  render();
+}
+
+function deleteEntry(id){
+  if(!confirm('삭제할까요?'))return;
+  for(const k of Object.keys(allData)){
+    const idx=allData[k].findIndex(x=>x.id==id);
+    if(idx>=0){allData[k].splice(idx,1);break;}
+  }
+  saveData();
+  toast('삭제됨');
+  render();
+}
+
+// ── Utilities ──────────────────────────────────────────
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+let toastTimer=null;
+function toast(msg){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),2000);
+}
+
+// ── Firebase 초기화 ──────────────────────────────────────
+(function initFirebase(){
+  try {
+    firebase.initializeApp({
+      apiKey: "AIzaSyAm_bADKYdS-8b_dsbcQ6bGxQQFkGXClTg",
+      authDomain: "aics-worksho-c390c.firebaseapp.com",
+      databaseURL: "https://aics-worksho-c390c-default-rtdb.firebaseio.com",
+      projectId: "aics-worksho-c390c",
+    });
+    window._fbBudgetRef = firebase.database().ref('budget/data');
+  } catch(e){}
+})();
+
+// ── Init ──────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded',()=>{
+  loadData();
+  render();
+  // Firebase에서 최신 데이터 복원 (localStorage 없을 때)
+  if(window._fbBudgetRef && !localStorage.getItem(STORAGE_KEY)){
+    window._fbBudgetRef.once('value', snap=>{
+      const d = snap.val();
+      if(!d) return;
+      allData = d;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(d));
+      render();
+    });
+  }
+});
+</script>
+</body>
+</html>
