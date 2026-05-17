@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#FFCC00">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="포카 알리미">
 <link rel="manifest" href="manifest.json">
@@ -18,46 +19,69 @@
 }
 body{background:var(--bg);color:var(--text);font-family:-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;height:100dvh;display:flex;flex-direction:column;overflow:hidden}
 
-header{background:var(--y);padding:13px 16px 11px;display:flex;align-items:center;gap:10px;flex-shrink:0}
-.logo{font-size:24px}.htitle{font-size:16px;font-weight:800;color:#111}.hsub{font-size:11px;color:#555}
-.hbadge{margin-left:auto;background:#111;color:var(--y);border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;display:none}
+header{background:var(--y);padding:12px 16px 10px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.logo{font-size:22px}
+.htitle{font-size:15px;font-weight:800;color:#111;flex:1}
+.hbadge{background:#111;color:var(--y);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;display:none}
 .hbadge.on{display:block;animation:blink 1.5s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
 
+/* 상품바 */
+.prod-bar{background:var(--bg2);border-bottom:1px solid rgba(255,255,255,.06);padding:9px 12px;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.prod-bar::-webkit-scrollbar{display:none}
+.prod-bar-inner{display:flex;gap:8px;align-items:center;min-width:max-content}
+.prod-chip{display:flex;align-items:center;gap:5px;background:var(--bg3);border:1.5px solid var(--y);border-radius:20px;padding:5px 10px 5px 5px;font-size:12px;font-weight:600;color:var(--text);white-space:nowrap}
+.prod-chip img,.prod-chip-ic{width:26px;height:26px;border-radius:5px;object-fit:cover;background:var(--bg4);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.prod-chip-nm{max-width:90px;overflow:hidden;text-overflow:ellipsis}
+.prod-chip-x{font-size:13px;color:var(--text3);cursor:pointer;padding:0 2px}
+.prod-add-btn{display:flex;align-items:center;gap:5px;background:var(--bg3);border:1.5px dashed var(--text3);border-radius:20px;padding:6px 14px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;white-space:nowrap;flex-shrink:0}
+.prod-empty{font-size:12px;color:var(--text3);padding:2px 0;flex-shrink:0}
+
+/* 탭 */
 .tabs{display:flex;background:var(--bg2);border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0}
-.tab{flex:1;padding:11px 0;text-align:center;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:.2s}
+.tab{flex:1;padding:10px 0;text-align:center;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;transition:.2s}
 .tab.active{color:var(--y);border-bottom-color:var(--y)}
 
 .panel{display:none;flex:1;overflow:hidden;flex-direction:column}
 .panel.active{display:flex}
 
-/* ══ 탭0: 지도 ══ */
+/* 지도 */
 #mapWrap{flex:1;position:relative;min-height:0}
 #map{width:100%;height:100%}
-.map-fab{position:absolute;z-index:10;left:50%;transform:translateX(-50%);bottom:16px;background:var(--y);border:none;border-radius:24px;padding:12px 22px;font-size:14px;font-weight:800;color:#111;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.5);white-space:nowrap;display:flex;align-items:center;gap:6px}
-.map-fab:active{opacity:.85}
+.map-fab{position:absolute;z-index:10;left:50%;transform:translateX(-50%);bottom:16px;background:var(--y);border:none;border-radius:24px;padding:11px 20px;font-size:13px;font-weight:800;color:#111;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.5);white-space:nowrap;display:flex;align-items:center;gap:6px}
 .map-fab.loading{background:var(--bg3);color:var(--text2);pointer-events:none}
 .map-loc-btn{position:absolute;z-index:10;right:12px;top:12px;width:40px;height:40px;background:var(--bg2);border:1px solid rgba(255,255,255,.1);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4)}
-.map-sel-badge{position:absolute;z-index:10;top:12px;left:12px;background:var(--bg2);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:6px 12px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.map-sel-badge{position:absolute;z-index:10;top:12px;left:12px;background:var(--bg2);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:5px 11px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 
-/* 카카오맵 커스텀 오버레이 */
-.mk{width:24px;height:24px;border-radius:50%;border:3px solid #111;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#111;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.5);transition:.15s}
-.mk.unsel{background:#FFCC00;width:16px;height:16px}
-.mk.sel{background:#FFCC00}
-.mk.stocked{background:#34c97a;border-color:#111;color:#fff}
+/* 마커 - 세븐일레븐 스타일 */
+.mk{min-width:38px;height:26px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;cursor:pointer;padding:0 8px;white-space:nowrap;position:relative;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.mk::after{content:'';position:absolute;bottom:-5px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:5px solid currentColor}
+.mk.unsel{background:#666;color:#ccc;min-width:16px;width:16px;height:16px;border-radius:50%;padding:0}
+.mk.unsel::after{display:none}
+.mk.sel{background:var(--y);color:#111}
+.mk.sel::after{color:var(--y)}
+.mk.stocked{background:var(--green);color:#fff}
+.mk.stocked::after{color:var(--green)}
+.mk.empty{background:#3a3a3a;color:#888;border:1px solid #444}
+.mk.empty::after{color:#3a3a3a}
 
-/* 팝업 오버레이 */
-.kakao-popup{background:var(--bg2);border-radius:12px;padding:14px 16px;min-width:180px;max-width:240px;box-shadow:0 4px 20px rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.08);position:relative}
+/* 팝업 */
+.kakao-popup{background:var(--bg2);border-radius:14px;padding:14px 16px;min-width:200px;max-width:260px;box-shadow:0 4px 24px rgba(0,0,0,.8);border:1px solid rgba(255,255,255,.1);position:relative}
 .kakao-popup::after{content:'';position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);border:8px solid transparent;border-bottom:none;border-top-color:var(--bg2)}
-.pop-name{font-size:14px;font-weight:700;margin-bottom:4px;color:var(--text)}
-.pop-addr{font-size:12px;color:var(--text2);line-height:1.4}
-.pop-qty{font-size:13px;font-weight:700;margin-top:6px}
-.pop-btn{margin-top:10px;width:100%;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:.15s}
+.pop-name{font-size:14px;font-weight:700;margin-bottom:3px}
+.pop-addr{font-size:11px;color:var(--text2);line-height:1.4;margin-bottom:8px}
+.pop-stocks{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;border-top:1px solid rgba(255,255,255,.06);padding-top:8px}
+.pop-stock-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px}
+.pop-stock-nm{color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pop-stock-qty{font-weight:800;flex-shrink:0}
+.pop-stock-qty.in{color:var(--green)}
+.pop-stock-qty.out{color:var(--text3)}
+.pop-btn{width:100%;padding:8px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
 .pop-btn.add{background:var(--y);color:#111}
 .pop-btn.remove{background:var(--bg4);color:var(--text2)}
 
-/* ══ 탭1: 매장 목록 ══ */
-.list-header{padding:12px 14px;background:var(--bg2);border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+/* 매장 목록 */
+.list-header{padding:11px 14px;background:var(--bg2);border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .list-count{font-size:13px;color:var(--text2)}
 .list-all-btn{font-size:13px;color:var(--y);background:none;border:none;cursor:pointer;font-weight:600}
 .group-list{flex:1;overflow-y:auto;padding:10px 12px 80px;display:flex;flex-direction:column;gap:8px}
@@ -65,7 +89,8 @@ header{background:var(--y);padding:13px 16px 11px;display:flex;align-items:cente
 .group-head{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;user-select:none}
 .group-name{font-size:14px;font-weight:700;flex:1}
 .g-badge{background:var(--bg3);border-radius:20px;padding:3px 8px;font-size:11px;color:var(--text2)}
-.g-badge.has{background:rgba(255,204,0,.15);color:var(--y)}
+.g-badge.stocked{background:rgba(52,201,122,.15);color:var(--green)}
+.g-badge.sel{background:rgba(255,204,0,.15);color:var(--y)}
 .g-arrow{font-size:10px;color:var(--text3);transition:.2s}
 .group.open .g-arrow{transform:rotate(180deg)}
 .g-all-btn{font-size:12px;color:var(--text2);background:none;border:none;cursor:pointer;padding:2px 6px}
@@ -79,18 +104,16 @@ header{background:var(--y);padding:13px 16px 11px;display:flex;align-items:cente
 .chk.on::after{content:'✓';font-size:12px;font-weight:900;color:#111}
 .store-info{flex:1;min-width:0}
 .store-nm{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.store-ad{font-size:12px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.s-stock{font-size:12px;font-weight:700;padding:3px 8px;border-radius:20px;background:var(--bg4);color:var(--text2);flex-shrink:0}
-.s-stock.in{background:rgba(52,201,122,.15);color:var(--green)}
-.list-empty{text-align:center;color:var(--text2);padding:48px 20px;font-size:14px;line-height:1.7}
+.store-ad{font-size:11px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.store-qtys{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+.s-qty{font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px;background:var(--bg4);color:var(--text2)}
+.s-qty.in{background:rgba(52,201,122,.15);color:var(--green)}
+.list-empty{text-align:center;color:var(--text2);padding:48px 20px;font-size:14px;line-height:1.8}
 
-/* ══ 탭2: 모니터링 ══ */
+/* 모니터링 */
 .mon-scroll{flex:1;overflow-y:auto;padding:14px 12px 80px;display:flex;flex-direction:column;gap:12px}
 .card{background:var(--bg2);border-radius:var(--r);padding:16px}
 .card-title{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:12px}
-label{display:block;font-size:13px;color:var(--text2);margin-bottom:5px}
-.field{width:100%;background:var(--bg3);border:1.5px solid transparent;border-radius:10px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;margin-bottom:10px}
-.field:focus{border-color:var(--y)}.field::placeholder{color:var(--text3)}
 .iv-row{display:flex;align-items:center;gap:10px}
 input[type=range]{flex:1;accent-color:var(--y)}
 .iv-lbl{font-size:14px;font-weight:700;color:var(--y);min-width:30px;text-align:right}
@@ -99,47 +122,68 @@ input[type=range]{flex:1;accent-color:var(--y)}
 .dot.active{background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 1.5s infinite}
 .dot.checking{background:var(--y);animation:blink .8s infinite}
 .dot.error{background:var(--red)}
-.st-txt{font-size:14px;font-weight:600;flex:1}.st-time{font-size:11px;color:var(--text2)}
+.st-txt{font-size:14px;font-weight:600;flex:1}
+.st-time{font-size:11px;color:var(--text2)}
 .now-btn{width:100%;padding:11px;background:var(--bg3);border:1.5px solid rgba(255,255,255,.1);border-radius:10px;color:var(--text);font-size:14px;font-weight:600;cursor:pointer}
 .r-list{display:flex;flex-direction:column;gap:8px}
 .r-item{background:var(--bg3);border-radius:10px;padding:12px 13px;border-left:3px solid var(--y)}
-.r-name{font-size:14px;font-weight:700}.r-addr{font-size:12px;color:var(--text3);margin-top:2px}
+.r-name{font-size:14px;font-weight:700}
+.r-sub{font-size:12px;color:var(--text3);margin-top:2px}
 .r-qty{font-size:13px;color:var(--y);font-weight:700;margin-top:5px}
 .r-empty{text-align:center;color:var(--text2);padding:18px 0;font-size:13px}
-.prod-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer}
-.prod-item:last-child{border-bottom:none}
-.prod-thumb{width:40px;height:40px;border-radius:8px;background:var(--bg3);object-fit:cover;flex-shrink:0}
-.prod-nm{font-size:13px;font-weight:600;flex:1;line-height:1.4}
-.prod-price{font-size:12px;color:var(--text2);margin-top:2px}
-.prod-chk{width:20px;height:20px;border-radius:6px;border:2px solid var(--bg4);background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.prod-chk.on{background:var(--y);border-color:var(--y)}
-.prod-chk.on::after{content:'✓';font-size:11px;font-weight:900;color:#111}
-.prod-tag{background:rgba(255,204,0,.15);color:var(--y);border:1px solid rgba(255,204,0,.3);border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:4px;cursor:pointer}
-.prod-tag span{font-size:10px;opacity:.7}
-.prod-hint{text-align:center;color:var(--text2);padding:14px 0;font-size:13px}
 
+/* 하단바 */
 .bottom-bar{position:fixed;bottom:0;left:0;right:0;padding:10px 12px 14px;background:linear-gradient(to top,var(--bg) 65%,transparent);z-index:500;display:none}
 .bottom-bar.show{display:block}
 .start-btn{width:100%;padding:14px;background:var(--y);border:none;border-radius:12px;font-size:15px;font-weight:800;color:#111;cursor:pointer}
-.start-btn:active{opacity:.85}
 .stop-btn{width:100%;padding:13px;background:var(--bg3);border:1.5px solid var(--red);border-radius:12px;font-size:14px;font-weight:700;color:var(--red);cursor:pointer;margin-top:8px;display:none}
+
+/* 상품 검색 모달 */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000;display:none;align-items:flex-end}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border-radius:20px 20px 0 0;width:100%;max-height:82vh;display:flex;flex-direction:column}
+.modal-head{padding:16px 16px 12px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.06);flex-shrink:0}
+.modal-title{font-size:15px;font-weight:700;flex:1}
+.modal-close{font-size:22px;color:var(--text2);background:none;border:none;cursor:pointer;line-height:1}
+.modal-body{flex:1;overflow-y:auto;padding:12px 14px 20px}
+.search-row{display:flex;gap:8px;margin-bottom:12px}
+.field{background:var(--bg3);border:1.5px solid transparent;border-radius:10px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;width:100%}
+.field:focus{border-color:var(--y)}
+.field::placeholder{color:var(--text3)}
+.srch-btn{background:var(--y);border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:800;color:#111;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.prod-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer}
+.prod-item:last-child{border-bottom:none}
+.prod-thumb{width:44px;height:44px;border-radius:8px;background:var(--bg3);object-fit:cover;flex-shrink:0}
+.prod-thumb-ic{width:44px;height:44px;border-radius:8px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.prod-nm{font-size:13px;font-weight:600;flex:1;line-height:1.4}
+.prod-price{font-size:12px;color:var(--text2);margin-top:2px}
+.prod-chk{width:22px;height:22px;border-radius:6px;border:2px solid var(--bg4);background:var(--bg3);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.prod-chk.on{background:var(--y);border-color:var(--y)}
+.prod-chk.on::after{content:'✓';font-size:12px;font-weight:900;color:#111}
+.prod-hint{text-align:center;color:var(--text2);padding:24px 0;font-size:13px}
 </style>
 </head>
 <body>
 
 <header>
   <div class="logo">🎴</div>
-  <div><div class="htitle">포켓몬카드 재고 알리미</div><div class="hsub">세븐일레븐 자동 재고 감시</div></div>
+  <div class="htitle">포켓몬카드 재고 알리미</div>
   <div class="hbadge" id="hbadge">● 감시 중</div>
 </header>
 
+<div class="prod-bar">
+  <div class="prod-bar-inner" id="prodBarInner">
+    <span class="prod-empty" id="prodEmpty">상품을 추가해주세요</span>
+    <button class="prod-add-btn" onclick="openProdSearch()">＋ 상품 추가</button>
+  </div>
+</div>
+
 <div class="tabs">
   <div class="tab active" onclick="switchTab(0)">🗺 지도</div>
-  <div class="tab" onclick="switchTab(1)">🏪 선택 매장</div>
+  <div class="tab" onclick="switchTab(1)">🏪 매장 목록</div>
   <div class="tab" onclick="switchTab(2)">📡 모니터링</div>
 </div>
 
-<!-- 탭0: 지도 -->
 <div class="panel active" id="panel0">
   <div id="mapWrap">
     <div id="map"></div>
@@ -151,7 +195,6 @@ input[type=range]{flex:1;accent-color:var(--y)}
   </div>
 </div>
 
-<!-- 탭1: 매장 목록 -->
 <div class="panel" id="panel1">
   <div class="list-header">
     <span class="list-count" id="listCount">0개 선택됨</span>
@@ -162,18 +205,8 @@ input[type=range]{flex:1;accent-color:var(--y)}
   </div>
 </div>
 
-<!-- 탭2: 모니터링 -->
 <div class="panel" id="panel2">
   <div class="mon-scroll">
-    <div class="card">
-      <div class="card-title">물품 검색</div>
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <input class="field" id="prodSearchInput" placeholder="포켓몬카드, 스칼렛바이올렛…" style="margin:0;flex:1">
-        <button onclick="searchProducts()" style="background:var(--y);border:none;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:800;color:#111;cursor:pointer;white-space:nowrap">검색</button>
-      </div>
-      <div id="prodResults"></div>
-      <div id="selectedProds" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px"></div>
-    </div>
     <div class="card">
       <div class="card-title">확인 주기</div>
       <div class="iv-row">
@@ -198,18 +231,33 @@ input[type=range]{flex:1;accent-color:var(--y)}
 </div>
 
 <div class="bottom-bar" id="bottomBar">
-  <button class="start-btn" id="startBtn" onclick="startMon()">선택 매장 모니터링 시작</button>
+  <button class="start-btn" id="startBtn" onclick="startMon()">모니터링 시작</button>
   <button class="stop-btn" id="stopBtn" onclick="stopMon()">■ 모니터링 중지</button>
+</div>
+
+<div class="modal-overlay" id="prodModal" onclick="if(event.target===this)closeProdSearch()">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">상품 검색</div>
+      <button class="modal-close" onclick="closeProdSearch()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="search-row">
+        <input class="field" id="prodSearchInput" placeholder="포켓몬카드, 스칼렛바이올렛…">
+        <button class="srch-btn" onclick="searchProducts()">검색</button>
+      </div>
+      <div id="prodResults"><div class="prod-hint">상품명을 검색해주세요</div></div>
+    </div>
+  </div>
 </div>
 
 <script>
 const REST_KEY = 'b7e63cbeaa846f9293930b566a9961a0';
-
-let map, allStores = [], selectedIds = new Set(), stockMap = {}, monitoring = false, sw = null;
+let map, allStores = [], selectedIds = new Set(), monitoring = false, sw = null;
 let overlays = {}, popupOverlay = null, allSel = false;
 let selectedProducts = new Map();
+let stockMap = {}; // storeKakaoId -> { itemCd -> qty }
 
-// ─── 탭 ──────────────────────────────────────────────
 function switchTab(i) {
   document.querySelectorAll('.tab').forEach((t,j) => t.classList.toggle('active', i===j));
   document.querySelectorAll('.panel').forEach((p,j) => p.classList.toggle('active', i===j));
@@ -217,31 +265,27 @@ function switchTab(i) {
   updateBottom();
 }
 
-// ─── 카카오맵 초기화 ──────────────────────────────────
 function initMap() {
-  const container = document.getElementById('map');
-  map = new kakao.maps.Map(container, {
-    center: new kakao.maps.LatLng(37.4, 127.0),
-    level: 5
+  map = new kakao.maps.Map(document.getElementById('map'), {
+    center: new kakao.maps.LatLng(37.4, 127.0), level: 5
   });
-  // 내 위치로 이동
-  navigator.geolocation?.getCurrentPosition(p => {
-    map.setCenter(new kakao.maps.LatLng(p.coords.latitude, p.coords.longitude));
-  });
+  navigator.geolocation?.getCurrentPosition(p =>
+    map.setCenter(new kakao.maps.LatLng(p.coords.latitude, p.coords.longitude))
+  );
 }
 
 function gotoMyLocation() {
-  navigator.geolocation?.getCurrentPosition(p => {
-    map.panTo(new kakao.maps.LatLng(p.coords.latitude, p.coords.longitude));
-  }, () => alert('위치 정보를 가져올 수 없습니다'));
+  navigator.geolocation?.getCurrentPosition(
+    p => map.panTo(new kakao.maps.LatLng(p.coords.latitude, p.coords.longitude)),
+    () => alert('위치 정보를 가져올 수 없습니다')
+  );
 }
 
-// ─── 카카오 로컬 API로 세븐일레븐 검색 ───────────────
 async function kakaoSearchStores(lat, lng, radius) {
   const results = [];
   for (let page = 1; page <= 3; page++) {
     const url = `https://dapi.kakao.com/v2/local/search/keyword.json?query=세븐일레븐&x=${lng}&y=${lat}&radius=${radius}&size=15&page=${page}&sort=distance`;
-    const res = await fetch(url, { headers: { 'Authorization': `KakaoAK ${REST_KEY}` } });
+    const res = await fetch(url, { headers: { Authorization: `KakaoAK ${REST_KEY}` } });
     if (!res.ok) break;
     const json = await res.json();
     results.push(...(json.documents || []));
@@ -253,273 +297,241 @@ async function kakaoSearchStores(lat, lng, radius) {
 async function searchInView() {
   const btn = document.getElementById('searchBtn');
   const txt = document.getElementById('searchBtnTxt');
-  btn.classList.add('loading');
-  txt.textContent = '검색 중…';
-  closePopup();
-
+  btn.classList.add('loading'); txt.textContent = '검색 중…'; closePopup();
   try {
-    const bounds = map.getBounds();
-    const sw = bounds.getSouthWest();
-    const ne = bounds.getNorthEast();
-    const cLat = (sw.getLat() + ne.getLat()) / 2;
-    const cLng = (sw.getLng() + ne.getLng()) / 2;
-
-    // 지도 대각선 반경 계산 (최대 20km)
-    const latDiff = (ne.getLat() - sw.getLat()) * 111000;
-    const lngDiff = (ne.getLng() - sw.getLng()) * 88000;
-    const radius = Math.min(Math.sqrt(latDiff**2 + lngDiff**2) / 2, 20000);
-
+    const b = map.getBounds(), sw = b.getSouthWest(), ne = b.getNorthEast();
+    const cLat = (sw.getLat()+ne.getLat())/2, cLng = (sw.getLng()+ne.getLng())/2;
+    const radius = Math.min(Math.sqrt(((ne.getLat()-sw.getLat())*111000)**2+((ne.getLng()-sw.getLng())*88000)**2)/2, 20000);
     const docs = await kakaoSearchStores(cLat, cLng, radius);
-    if (!docs.length) {
-      alert('이 지역에서 세븐일레븐을 찾지 못했습니다.\n지도를 더 넓게 보거나 다른 위치로 이동해보세요.');
-      return;
-    }
-
-    // 기존 오버레이 제거 후 병합
-    Object.values(overlays).forEach(o => o.setMap(null));
-    overlays = {};
-
-    const existingIds = new Set(allStores.map(s => s.id));
+    if (!docs.length) { alert('이 지역에서 세븐일레븐을 찾지 못했습니다.'); return; }
+    const existing = new Set(allStores.map(s => s.id));
     docs.forEach(d => {
-      if (existingIds.has(d.id)) return;
-      allStores.push({
-        id: d.id,
-        storeName: d.place_name,
-        lat: parseFloat(d.y),
-        lng: parseFloat(d.x),
-        address: d.road_address_name || d.address_name,
-        phone: d.phone,
-        placeUrl: d.place_url
-      });
+      if (existing.has(d.id)) return;
+      allStores.push({ id:d.id, storeName:d.place_name, lat:parseFloat(d.y), lng:parseFloat(d.x),
+        address:d.road_address_name||d.address_name });
     });
-
-    renderMapOverlays();
-    renderGroupList();
+    renderMapOverlays(); renderGroupList();
     txt.textContent = `이 지역에서 매장 찾기 (${allStores.length}개)`;
-  } catch(e) {
-    alert('검색 오류: ' + e.message);
-    txt.textContent = '이 지역에서 매장 찾기';
-  } finally {
-    btn.classList.remove('loading');
-  }
+  } catch(e) { alert('오류: '+e.message); txt.textContent = '이 지역에서 매장 찾기'; }
+  finally { btn.classList.remove('loading'); }
 }
 
-// ─── 커스텀 오버레이 마커 ─────────────────────────────
+// ─── 마커 ──────────────────────────────────────────────
+function markerState(id) {
+  const stk = stockMap[id];
+  if (!stk) return selectedIds.has(id) ? 'sel' : 'unsel';
+  return Object.values(stk).some(q => (parseInt(q)||0) > 0) ? 'stocked' : 'empty';
+}
+function markerLabel(id) {
+  const stk = stockMap[id];
+  if (!stk) return selectedIds.has(id) ? '선택' : '';
+  const total = Object.values(stk).reduce((a,b) => a+(parseInt(b)||0), 0);
+  return total+'개';
+}
 function makeMarkerEl(id) {
-  const sel = selectedIds.has(id);
-  const qty = stockMap[id];
-  const hasStock = qty != null && parseInt(qty) > 0;
   const el = document.createElement('div');
-  el.className = `mk ${hasStock ? 'stocked' : sel ? 'sel' : 'unsel'}`;
-  el.textContent = sel ? '✓' : '';
-  el.onclick = (e) => { e.stopPropagation(); showPopup(id); };
+  el.className = 'mk ' + markerState(id);
+  el.textContent = markerLabel(id);
+  el.onclick = e => { e.stopPropagation(); showPopup(id); };
   return el;
 }
-
 function renderMapOverlays() {
-  Object.values(overlays).forEach(o => o.setMap(null));
-  overlays = {};
+  Object.values(overlays).forEach(o => o.setMap(null)); overlays = {};
   allStores.forEach(s => {
-    const el = makeMarkerEl(s.id);
     const ov = new kakao.maps.CustomOverlay({
-      position: new kakao.maps.LatLng(s.lat, s.lng),
-      content: el,
-      map,
-      zIndex: selectedIds.has(s.id) ? 10 : 1
+      position: new kakao.maps.LatLng(s.lat, s.lng), content: makeMarkerEl(s.id),
+      map, zIndex: selectedIds.has(s.id) ? 10 : 1
     });
     overlays[s.id] = ov;
   });
-  // 지도 클릭 시 팝업 닫기
   kakao.maps.event.addListener(map, 'click', closePopup);
   updateSelBadge();
 }
-
 function refreshMarker(id) {
-  const ov = overlays[id];
-  if (!ov) return;
-  const el = makeMarkerEl(id);
-  ov.setContent(el);
-  ov.setZIndex(selectedIds.has(id) ? 10 : 1);
+  const ov = overlays[id]; if (!ov) return;
+  ov.setContent(makeMarkerEl(id)); ov.setZIndex(selectedIds.has(id) ? 10 : 1);
 }
 
-// ─── 팝업 ────────────────────────────────────────────
+// ─── 팝업 ──────────────────────────────────────────────
 function showPopup(id) {
   closePopup();
-  const s = allStores.find(x => x.id === id);
-  if (!s) return;
-  const sel = selectedIds.has(id);
-  const qty = stockMap[id];
-  const hasStock = qty != null && parseInt(qty) > 0;
+  const s = allStores.find(x => x.id===id); if (!s) return;
+  const stk = stockMap[id];
+  let stockHtml = '';
+  if (stk && selectedProducts.size) {
+    stockHtml = '<div class="pop-stocks">';
+    for (const [cd, qty] of Object.entries(stk)) {
+      const p = selectedProducts.get(cd);
+      const q = parseInt(qty)||0;
+      stockHtml += `<div class="pop-stock-row">
+        <span class="pop-stock-nm">${p?.name||cd}</span>
+        <span class="pop-stock-qty ${q>0?'in':'out'}">${q}개</span></div>`;
+    }
+    stockHtml += '</div>';
+  }
   const el = document.createElement('div');
   el.className = 'kakao-popup';
-  el.innerHTML = `
-    <div class="pop-name">${s.storeName}</div>
-    <div class="pop-addr">${s.address}</div>
-    ${qty != null ? `<div class="pop-qty" style="color:${hasStock?'#34c97a':'#9090a0'}">${hasStock?'재고 '+qty+'개':'재고 없음'}</div>` : ''}
-    <button class="pop-btn ${sel?'remove':'add'}" onclick="toggleStore('${id}');closePopup()">${sel?'선택 해제':'선택하기'}</button>`;
+  el.innerHTML = `<div class="pop-name">${s.storeName}</div>
+    <div class="pop-addr">${s.address}</div>${stockHtml}
+    <button class="pop-btn ${selectedIds.has(id)?'remove':'add'}" onclick="toggleStore('${id}');closePopup()">
+      ${selectedIds.has(id)?'선택 해제':'선택하기'}</button>`;
   popupOverlay = new kakao.maps.CustomOverlay({
-    position: new kakao.maps.LatLng(s.lat, s.lng),
-    content: el,
-    map,
-    yAnchor: 1.35,
-    zIndex: 100
+    position: new kakao.maps.LatLng(s.lat, s.lng), content: el,
+    map, yAnchor: 1.35, zIndex: 100
   });
 }
+function closePopup() { if (popupOverlay) { popupOverlay.setMap(null); popupOverlay = null; } }
 
-function closePopup() {
-  if (popupOverlay) { popupOverlay.setMap(null); popupOverlay = null; }
-}
-
-// ─── 선택 로직 ────────────────────────────────────────
+// ─── 선택 ──────────────────────────────────────────────
 function toggleStore(id) {
-  if (selectedIds.has(id)) selectedIds.delete(id);
-  else selectedIds.add(id);
-  const chk = document.getElementById('chk-' + id);
-  if (chk) chk.className = 'chk ' + (selectedIds.has(id) ? 'on' : '');
-  refreshMarker(id);
-  updateSelBadge();
-  updateGroupBadge(id);
-  updateListCount();
-  updateBottom();
+  selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
+  const chk = document.getElementById('chk-'+id);
+  if (chk) chk.className = 'chk '+(selectedIds.has(id)?'on':'');
+  refreshMarker(id); updateSelBadge(); updateGroupBadge(id); updateListCount(); updateBottom();
 }
-
 function toggleGroupAll(gn) {
-  const gs = allStores.filter(s => getGroup(s) === gn);
+  const gs = allStores.filter(s => getGroup(s)===gn);
   const allOn = gs.every(s => selectedIds.has(s.id));
   gs.forEach(s => {
-    if (allOn) selectedIds.delete(s.id); else selectedIds.add(s.id);
-    const chk = document.getElementById('chk-' + s.id);
-    if (chk) chk.className = 'chk ' + (selectedIds.has(s.id) ? 'on' : '');
+    allOn ? selectedIds.delete(s.id) : selectedIds.add(s.id);
+    const chk = document.getElementById('chk-'+s.id);
+    if (chk) chk.className = 'chk '+(selectedIds.has(s.id)?'on':'');
     refreshMarker(s.id);
   });
-  updateSelBadge(); updateGroupBadge(null, gn); updateListCount(); updateBottom();
+  updateSelBadge(); updateGroupBadge(null,gn); updateListCount(); updateBottom();
 }
-
 function toggleAll() {
   allSel = !allSel;
   allStores.forEach(s => {
-    if (allSel) selectedIds.add(s.id); else selectedIds.delete(s.id);
-    const chk = document.getElementById('chk-' + s.id);
-    if (chk) chk.className = 'chk ' + (selectedIds.has(s.id) ? 'on' : '');
+    allSel ? selectedIds.add(s.id) : selectedIds.delete(s.id);
+    const chk = document.getElementById('chk-'+s.id);
+    if (chk) chk.className = 'chk '+(selectedIds.has(s.id)?'on':'');
     refreshMarker(s.id);
   });
   document.getElementById('allBtn').textContent = allSel ? '전체 해제' : '전체 선택';
-  document.querySelectorAll('.g-badge').forEach(b => {
-    const gn = b.dataset.group;
-    const gs = allStores.filter(s => getGroup(s) === gn);
+  document.querySelectorAll('[data-group]').forEach(b => {
+    const gn = b.dataset.group; if (!gn) return;
+    const gs = allStores.filter(s => getGroup(s)===gn);
     const cnt = gs.filter(s => selectedIds.has(s.id)).length;
-    b.textContent = `${cnt}/${gs.length}`; b.className = 'g-badge ' + (cnt ? 'has' : '');
+    b.textContent = `${cnt}/${gs.length}`;
+    b.className = 'g-badge '+(cnt?'sel':'');
   });
   updateSelBadge(); updateListCount(); updateBottom();
 }
-
-// ─── 그룹키: 주소 기반 ────────────────────────────────
 function getGroup(s) {
-  const addr = s.address || '';
-  const parts = addr.split(' ').filter(Boolean);
-  const dong = parts.find(p => /동$|읍$|면$/.test(p));
-  const gu   = parts.find(p => /구$|군$/.test(p));
-  return dong || gu || parts[1] || parts[0] || '기타';
+  const p = (s.address||'').split(' ').filter(Boolean);
+  return p.find(x=>/동$|읍$|면$/.test(x)) || p.find(x=>/구$|군$/.test(x)) || p[1] || p[0] || '기타';
 }
 
 function renderGroupList() {
   const groups = {};
-  allStores.forEach(s => { const g = getGroup(s); if (!groups[g]) groups[g] = []; groups[g].push(s); });
-  const list = document.getElementById('groupList');
-  list.innerHTML = '';
+  allStores.forEach(s => { const g=getGroup(s); (groups[g]=groups[g]||[]).push(s); });
+  const list = document.getElementById('groupList'); list.innerHTML = '';
   Object.keys(groups).sort().forEach(key => {
     const stores = groups[key];
     const selCnt = stores.filter(s => selectedIds.has(s.id)).length;
+    const hasStock = stores.some(s => { const st=stockMap[s.id]; return st&&Object.values(st).some(q=>(parseInt(q)||0)>0); });
     const div = document.createElement('div');
     div.className = 'group'; div.dataset.group = key;
     div.innerHTML = `
       <div class="group-head" onclick="this.closest('.group').classList.toggle('open')">
         <div class="group-name">${key}</div>
-        <span class="g-badge ${selCnt?'has':''}" data-group="${key}" id="gb-${key.replace(/\s/g,'_')}">${selCnt}/${stores.length}</span>
+        <span class="g-badge ${hasStock?'stocked':selCnt?'sel':''}" data-group="${key}" id="gb-${key.replace(/\s/g,'_')}">${selCnt}/${stores.length}</span>
         <button class="g-all-btn" onclick="event.stopPropagation();toggleGroupAll('${key}')">전체</button>
         <span class="g-arrow">▼</span>
       </div>
       <div class="group-stores">
-        ${stores.map(s => `
-          <div class="store-row" onclick="toggleStore('${s.id}')">
+        ${stores.map(s => {
+          const stk = stockMap[s.id];
+          const qtyHtml = stk ? '<div class="store-qtys">'+
+            Object.entries(stk).map(([cd,q])=>{
+              const qq=parseInt(q)||0;
+              return `<div class="s-qty ${qq>0?'in':''}">${qq}개</div>`;
+            }).join('')+'</div>' : '';
+          return `<div class="store-row" onclick="toggleStore('${s.id}')">
             <div class="chk ${selectedIds.has(s.id)?'on':''}" id="chk-${s.id}"></div>
             <div class="store-info">
               <div class="store-nm">${s.storeName}</div>
               <div class="store-ad">${s.address}</div>
-            </div>
-            ${stockMap[s.id]!=null?`<div class="s-stock ${parseInt(stockMap[s.id])>0?'in':''}">${parseInt(stockMap[s.id])>0?stockMap[s.id]+'개':'없음'}</div>`:''}
-          </div>`).join('')}
+            </div>${qtyHtml}</div>`;
+        }).join('')}
       </div>`;
     list.appendChild(div);
   });
   updateListCount();
 }
-
-function updateGroupBadge(id, forceName) {
-  const s = id ? allStores.find(x => x.id === id) : null;
-  const gn = forceName || (s && getGroup(s));
-  if (!gn) return;
-  const gs = allStores.filter(x => getGroup(x) === gn);
-  const cnt = gs.filter(x => selectedIds.has(x.id)).length;
-  const b = document.getElementById('gb-' + gn.replace(/\s/g,'_'));
-  if (b) { b.textContent = `${cnt}/${gs.length}`; b.className = 'g-badge ' + (cnt ? 'has' : ''); }
+function updateGroupBadge(id, fn) {
+  const s = id ? allStores.find(x=>x.id===id) : null;
+  const gn = fn||(s&&getGroup(s)); if (!gn) return;
+  const gs = allStores.filter(x=>getGroup(x)===gn);
+  const cnt = gs.filter(x=>selectedIds.has(x.id)).length;
+  const hasStock = gs.some(x=>{ const st=stockMap[x.id]; return st&&Object.values(st).some(q=>(parseInt(q)||0)>0); });
+  const b = document.getElementById('gb-'+gn.replace(/\s/g,'_'));
+  if (b) { b.textContent=`${cnt}/${gs.length}`; b.className='g-badge '+(hasStock?'stocked':cnt?'sel':''); }
 }
-function updateSelBadge() { document.getElementById('selBadge').textContent = `${selectedIds.size}개 선택`; }
-function updateListCount() { document.getElementById('listCount').textContent = `${selectedIds.size}개 선택됨`; }
+function updateSelBadge() { document.getElementById('selBadge').textContent=`${selectedIds.size}개 선택`; }
+function updateListCount() { document.getElementById('listCount').textContent=`${selectedIds.size}개 선택됨`; }
 function updateBottom() {
-  const tab = [...document.querySelectorAll('.tab')].findIndex(t => t.classList.contains('active'));
-  document.getElementById('bottomBar').classList.toggle('show', tab !== 2 && selectedIds.size > 0);
-  document.getElementById('startBtn').style.display = monitoring ? 'none' : 'block';
-  document.getElementById('stopBtn').style.display = monitoring ? 'block' : 'none';
+  const tab = [...document.querySelectorAll('.tab')].findIndex(t=>t.classList.contains('active'));
+  document.getElementById('bottomBar').classList.toggle('show', tab!==2 && (selectedIds.size>0||monitoring));
+  document.getElementById('startBtn').style.display = monitoring?'none':'block';
+  document.getElementById('stopBtn').style.display = monitoring?'block':'none';
 }
 
-// ─── 물품 검색 ────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('prodSearchInput').addEventListener('keydown', e => { if (e.key==='Enter') searchProducts(); });
-});
-
+// ─── 상품 검색 모달 ────────────────────────────────────
+function openProdSearch() { document.getElementById('prodModal').classList.add('open'); }
+function closeProdSearch() { document.getElementById('prodModal').classList.remove('open'); }
+document.addEventListener('DOMContentLoaded', () =>
+  document.getElementById('prodSearchInput').addEventListener('keydown', e => { if(e.key==='Enter') searchProducts(); })
+);
 async function searchProducts() {
-  const q = document.getElementById('prodSearchInput').value.trim();
-  if (!q) return;
+  const q = document.getElementById('prodSearchInput').value.trim(); if (!q) return;
   const box = document.getElementById('prodResults');
   box.innerHTML = '<div class="prod-hint">검색 중…</div>';
   try {
     const res = await fetch(`https://mcp.aka.page/api/seveneleven/products?query=${encodeURIComponent(q)}&page=1&size=15`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new Error('HTTP '+res.status);
     const json = await res.json();
-    const items = json?.data?.list || json?.data?.goodsList || [];
-    if (!items.length) { box.innerHTML = '<div class="prod-hint">검색 결과가 없습니다</div>'; return; }
+    const items = json?.data?.list||json?.data?.goodsList||[];
+    if (!items.length) { box.innerHTML='<div class="prod-hint">검색 결과가 없습니다</div>'; return; }
     box.innerHTML = items.map(item => {
-      const id = item.itemCd || item.goodsCd || '';
-      const name = item.goodsNm || item.itemNm || '상품명 없음';
-      const price = item.price ? parseInt(item.price).toLocaleString() + '원' : '';
-      const img = item.imgUrl || item.goodsImg || '';
+      const id = item.itemCd||item.goodsCd||'';
+      const name = item.goodsNm||item.itemNm||'상품명 없음';
+      const price = item.price ? parseInt(item.price).toLocaleString()+'원' : '';
+      const img = item.imgUrl||item.goodsImg||'';
       const on = selectedProducts.has(id);
       return `<div class="prod-item" onclick="toggleProduct('${id}','${name.replace(/'/g,"\\'")}','${img}')">
-        ${img ? `<img class="prod-thumb" src="${img}" onerror="this.style.display='none'">` : '<div class="prod-thumb" style="display:flex;align-items:center;justify-content:center;font-size:18px">🎴</div>'}
+        ${img?`<img class="prod-thumb" src="${img}" onerror="this.style.display='none'">`:'<div class="prod-thumb-ic">🎴</div>'}
         <div style="flex:1;min-width:0"><div class="prod-nm">${name}</div>${price?`<div class="prod-price">${price}</div>`:''}</div>
-        <div class="prod-chk ${on?'on':''}" id="pchk-${id}"></div>
-      </div>`;
+        <div class="prod-chk ${on?'on':''}" id="pchk-${id}"></div></div>`;
     }).join('');
-  } catch(e) { box.innerHTML = `<div class="prod-hint">오류: ${e.message}</div>`; }
+  } catch(e) { box.innerHTML=`<div class="prod-hint">오류: ${e.message}</div>`; }
 }
-
 function toggleProduct(id, name, img) {
-  if (selectedProducts.has(id)) selectedProducts.delete(id);
-  else selectedProducts.set(id, { itemCd: id, name, img });
-  const chk = document.getElementById('pchk-' + id);
-  if (chk) chk.className = 'prod-chk ' + (selectedProducts.has(id) ? 'on' : '');
-  renderSelectedProds();
+  selectedProducts.has(id) ? selectedProducts.delete(id) : selectedProducts.set(id, {itemCd:id,name,img});
+  const chk = document.getElementById('pchk-'+id);
+  if (chk) chk.className = 'prod-chk '+(selectedProducts.has(id)?'on':'');
+  renderProdBar();
 }
-function renderSelectedProds() {
-  const wrap = document.getElementById('selectedProds');
-  if (!selectedProducts.size) { wrap.innerHTML = ''; return; }
-  wrap.innerHTML = [...selectedProducts.values()].map(p =>
-    `<div class="prod-tag" onclick="toggleProduct('${p.itemCd}','${p.name.replace(/'/g,"\\'")}','')">
-      ${p.name} <span>✕</span></div>`).join('');
+function renderProdBar() {
+  const inner = document.getElementById('prodBarInner');
+  inner.querySelectorAll('.prod-chip').forEach(c=>c.remove());
+  const empty = document.getElementById('prodEmpty');
+  if (empty) empty.style.display = selectedProducts.size?'none':'block';
+  const addBtn = inner.querySelector('.prod-add-btn');
+  [...selectedProducts.values()].forEach(p => {
+    const chip = document.createElement('div');
+    chip.className = 'prod-chip';
+    chip.innerHTML = p.img
+      ? `<img src="${p.img}" width="26" height="26" style="border-radius:5px;object-fit:cover" onerror="this.style.display='none'">`
+      : '<span class="prod-chip-ic">🎴</span>';
+    chip.innerHTML += `<span class="prod-chip-nm">${p.name}</span>
+      <span class="prod-chip-x" onclick="event.stopPropagation();toggleProduct('${p.itemCd}','${p.name.replace(/'/g,"\\'")}','${p.img}')">✕</span>`;
+    inner.insertBefore(chip, addBtn);
+  });
 }
 
-// ─── 서비스 워커 ─────────────────────────────────────
+// ─── 서비스 워커 ───────────────────────────────────────
 async function initSW() {
   if (!('serviceWorker' in navigator)) return;
   try {
@@ -529,52 +541,54 @@ async function initSW() {
     navigator.serviceWorker.addEventListener('controllerchange', () => { sw = navigator.serviceWorker.controller; });
   } catch(e) { console.error(e); }
 }
-
 function onSwMsg(e) {
-  const { type, status, stocked, isManual, time, message } = e.data || {};
+  const { type, status, stocked, allChecked, isManual, time, message } = e.data||{};
   if (type !== 'STATUS') return;
-  if (status === 'checking') setStatus('checking', '재고 확인 중…');
-  else if (status === 'done') {
+  if (status === 'checking') { setStatus('checking','재고 확인 중…'); return; }
+  if (status === 'done') {
     const t = time ? new Date(time).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '';
-    if (stocked?.length) {
-      setStatus('active', `재고 발견! ${stocked.length}개 매장`, t);
-      stocked.forEach(s => {
-        const matched = allStores.find(x => x.id === s.kakaoId || (Math.abs(x.lat-(parseFloat(s.y||0)))<0.001 && Math.abs(x.lng-(parseFloat(s.x||0)))<0.001));
-        if (matched) { stockMap[matched.id] = s.stock ?? 1; refreshMarker(matched.id); }
+    if (allChecked?.length) {
+      allChecked.forEach(item => {
+        const store = allStores.find(x => x.id===item.kakaoId);
+        if (!store) return;
+        if (!stockMap[store.id]) stockMap[store.id] = {};
+        stockMap[store.id][item.itemCd] = item.stock ?? 0;
+        refreshMarker(store.id);
       });
+      renderGroupList();
+    }
+    if (stocked?.length) {
+      setStatus('active',`재고 발견! ${stocked.length}개 매장`,t);
       renderResults(stocked);
-    } else { setStatus('active','재고 없음 · 계속 감시 중',t); if (isManual) renderResults([]); }
-  } else if (status === 'error') setStatus('error', '오류: '+(message||'알 수 없음'));
+    } else {
+      setStatus('active','재고 없음 · 계속 감시 중',t);
+      if (isManual) renderResults([]);
+    }
+  } else if (status === 'error') setStatus('error','오류: '+(message||'알 수 없음'));
 }
 
-// ─── 모니터링 ─────────────────────────────────────────
 async function startMon() {
-  if (!selectedIds.size) { alert('먼저 매장을 선택해 주세요.'); return; }
-  if (!selectedProducts.size) { alert('모니터링 탭에서 물품을 먼저 선택해 주세요.'); return; }
+  if (!selectedIds.size) { alert('매장을 선택해 주세요.'); return; }
+  if (!selectedProducts.size) { alert('상품을 추가해 주세요.'); return; }
   if (!sw) sw = (await navigator.serviceWorker.ready).active;
-  const selStores = allStores.filter(s => selectedIds.has(s.id));
-  sw.postMessage({
-    type: 'START_MONITORING',
-    data: {
-      products: [...selectedProducts.values()],
-      kakaoStores: selStores.map(s => ({ kakaoId: s.id, name: s.storeName, x: s.lng, y: s.lat })),
-      intervalMs: parseInt(document.getElementById('ivRange').value) * 60000
-    }
-  });
+  sw.postMessage({ type:'START_MONITORING', data:{
+    products: [...selectedProducts.values()],
+    kakaoStores: allStores.filter(s=>selectedIds.has(s.id)).map(s=>({kakaoId:s.id,name:s.storeName,x:s.lng,y:s.lat})),
+    intervalMs: parseInt(document.getElementById('ivRange').value)*60000
+  }});
   monitoring = true;
   document.getElementById('hbadge').classList.add('on');
   document.getElementById('nowBtn').style.display = 'block';
   updateBottom(); setStatus('active','모니터링 중'); switchTab(2);
 }
 function stopMon() {
-  if (sw) sw.postMessage({ type: 'STOP_MONITORING' });
+  if (sw) sw.postMessage({type:'STOP_MONITORING'});
   monitoring = false;
   document.getElementById('hbadge').classList.remove('on');
   document.getElementById('nowBtn').style.display = 'none';
   updateBottom(); setStatus('','대기 중');
 }
-function checkNow() { if (sw) sw.postMessage({ type: 'CHECK_NOW' }); setStatus('checking','확인 중…'); }
-
+function checkNow() { if (sw) sw.postMessage({type:'CHECK_NOW'}); setStatus('checking','확인 중…'); }
 function setStatus(cls, txt, time='') {
   document.getElementById('stDot').className = 'dot'+(cls?' '+cls:'');
   document.getElementById('stTxt').textContent = txt;
@@ -582,22 +596,20 @@ function setStatus(cls, txt, time='') {
 }
 function renderResults(stores) {
   const l = document.getElementById('rList');
-  if (!stores.length) { l.innerHTML='<div class="r-empty">현재 재고 있는 매장이 없습니다</div>'; return; }
-  l.innerHTML = stores.map(s => `
+  if (!stores?.length) { l.innerHTML='<div class="r-empty">재고 있는 매장이 없습니다</div>'; return; }
+  l.innerHTML = stores.map(s=>`
     <div class="r-item">
-      <div class="r-name">${s.storeName||s.name||'매장'}</div>
-      <div class="r-addr">${s.address||s.roadAddr||''}</div>
-      <div class="r-qty">재고 ${s.stock??'?'}개</div>
+      <div class="r-name">${s.storeName||s.storeNm||'매장'}</div>
+      <div class="r-sub">${s.address||s.roadAddr||''}</div>
+      <div class="r-qty">재고 ${s.stock??'?'}개 · ${s.productName||''}</div>
     </div>`).join('');
 }
-
-document.getElementById('ivRange').addEventListener('input', function() { document.getElementById('ivLbl').textContent = this.value+'분'; });
+document.getElementById('ivRange').addEventListener('input', function(){ document.getElementById('ivLbl').textContent=this.value+'분'; });
 
 if (typeof kakao !== 'undefined') {
   kakao.maps.load(() => { initMap(); });
 } else {
-  document.getElementById('map').style.cssText = 'display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#aaa';
-  document.getElementById('map').innerHTML = '<div style="font-size:32px">⚠️</div><div style="font-size:13px;text-align:center">카카오맵 로드 실패<br><span style="font-size:11px;color:#666">Kakao 콘솔에서 htbang.github.io 도메인 확인 필요</span></div>';
+  document.getElementById('map').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:#aaa"><div style="font-size:32px">⚠️</div><div style="font-size:13px;text-align:center">카카오맵 로드 실패</div></div>';
 }
 initSW();
 if ('Notification' in window && Notification.permission==='default') Notification.requestPermission();
