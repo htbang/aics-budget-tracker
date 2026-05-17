@@ -492,13 +492,13 @@ async function searchProducts() {
     const res = await fetch(`https://mcp.aka.page/api/seveneleven/products?query=${encodeURIComponent(q)}&page=1&size=15`);
     if (!res.ok) throw new Error('HTTP '+res.status);
     const json = await res.json();
-    const items = json?.data?.list||json?.data?.goodsList||[];
+    const items = json?.data?.products||json?.data?.list||json?.data?.goodsList||[];
     if (!items.length) { box.innerHTML='<div class="prod-hint">검색 결과가 없습니다</div>'; return; }
     box.innerHTML = items.map(item => {
-      const id = item.itemCd||item.goodsCd||'';
-      const name = item.goodsNm||item.itemNm||'상품명 없음';
-      const price = item.price ? parseInt(item.price).toLocaleString()+'원' : '';
-      const img = item.imgUrl||item.goodsImg||'';
+      const id = item.itemCode||item.itemCd||item.goodsCd||'';
+      const name = item.itemName||item.goodsNm||item.itemNm||'상품명 없음';
+      const price = (item.salePrice||item.price) ? parseInt(item.salePrice||item.price).toLocaleString()+'원' : '';
+      const img = item.imageUrl||item.imgUrl||item.goodsImg||'';
       const on = selectedProducts.has(id);
       return `<div class="prod-item" onclick="toggleProduct('${id}','${name.replace(/'/g,"\\'")}','${img}')">
         ${img?`<img class="prod-thumb" src="${img}" onerror="this.style.display='none'">`:'<div class="prod-thumb-ic">🎴</div>'}
