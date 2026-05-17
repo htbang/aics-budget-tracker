@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="포카 알리미">
 <link rel="manifest" href="manifest.json">
-<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=5a47e29f45a5a1650dff8c887084e342&libraries=services"></script>
+<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=5a47e29f45a5a1650dff8c887084e342&libraries=services&autoload=false"></script>
 <title>포켓몬카드 재고 알리미</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -593,7 +593,7 @@ function renderResults(stores) {
 
 document.getElementById('ivRange').addEventListener('input', function() { document.getElementById('ivLbl').textContent = this.value+'분'; });
 
-initMap();
+kakao.maps.load(() => { initMap(); });
 initSW();
 if ('Notification' in window && Notification.permission==='default') Notification.requestPermission();
 </script>
