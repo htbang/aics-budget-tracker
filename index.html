@@ -593,7 +593,12 @@ function renderResults(stores) {
 
 document.getElementById('ivRange').addEventListener('input', function() { document.getElementById('ivLbl').textContent = this.value+'분'; });
 
-kakao.maps.load(() => { initMap(); });
+if (typeof kakao !== 'undefined') {
+  kakao.maps.load(() => { initMap(); });
+} else {
+  document.getElementById('map').style.cssText = 'display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#aaa';
+  document.getElementById('map').innerHTML = '<div style="font-size:32px">⚠️</div><div style="font-size:13px;text-align:center">카카오맵 로드 실패<br><span style="font-size:11px;color:#666">Kakao 콘솔에서 htbang.github.io 도메인 확인 필요</span></div>';
+}
 initSW();
 if ('Notification' in window && Notification.permission==='default') Notification.requestPermission();
 </script>
