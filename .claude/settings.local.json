@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\.claude\\\\projects\\\\\" -Directory 2>$null | Select-Object Name)",
+      "Bash(ls -la \"C:\\\\Users\\\\Administrator\\\\.claude\\\\projects\\\\C--Users-Administrator-Desktop-ai\\\\memory\\\\\")",
+      "Bash(gh repo *)",
+      "Bash(gh search *)",
+      "Bash(gh api *)",
+      "Bash(curl -s https://raw.githubusercontent.com/htbang/Dashboard_kakao/main/index.html)",
+      "Bash(curl -s https://raw.githubusercontent.com/htbang/Dashboard_kakao/main/src/App.jsx)",
+      "Bash(find \"C:\\\\Users\\\\Administrator\\\\Documents\\\\OneDrive\\\\user\\\\project\" -maxdepth 2 -type d -iname \"*pokemon*\" -o -iname \"*kakao*\" -o -iname \"*dashboard*\" 2>/dev/null)",
+      "Bash(xargs -I {} basename {})",
+      "Bash(xargs -I {} dirname {})",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Administrator\\\\Documents\\\\OneDrive\\\\user\\\\project\" -Filter \"package.json\" -Recurse -Depth 1 | ForEach-Object { $_.Directory.Name } | Select-Object -Unique)",
+      "Bash(npm install *)",
+      "Bash(git add *)"
+    ]
+  }
+}
