@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
-// GET - 사용자의 찜 목록
+// GET - 사용자의 편의점별 찜 목록
 export async function GET(req: NextRequest) {
   try {
     const userId = req.nextUrl.searchParams.get('user_id');
@@ -14,13 +14,13 @@ export async function GET(req: NextRequest) {
     }
 
     const result = await query(
-      `SELECT w.id, w.user_id, w.product_id, p.name, p.brand, w.region,
-              w.is_active, w.notify_by_fcm, w.notify_by_vibrate, w.last_notified_at,
-              w.created_at
-       FROM wishlists w
-       JOIN products p ON w.product_id = p.id
-       WHERE w.user_id = $1 AND w.is_active = true
-       ORDER BY w.created_at DESC;`,
+      `SELECT ss.id, ss.product_id, p.actual_name, ss.convenience_brand, ss.search_name,
+              ss.region, ss.is_active, ss.notify_by_fcm, ss.notify_by_vibrate,
+              ss.last_notified_at, ss.created_at
+       FROM search_stores ss
+       JOIN products p ON ss.product_id = p.id
+       WHERE p.user_id = $1 AND ss.is_active = true
+       ORDER BY p.actual_name, ss.convenience_brand;`,
       [parseInt(userId)]
     );
 
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
       data: result.rows,
     });
   } catch (error) {
-    console.error('Get wishlists error:', error);
+    console.error('Get search stores error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -37,23 +37,36 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST - 새 찜 추가
+// POST - 편의점별 찜 추가
 export async function POST(req: NextRequest) {
   try {
-    const { user_id, product_id, region, notify_by_fcm, notify_by_vibrate } = await req.json();
+    const { user_id, product_id, convenience_brand, search_name, region, notify_by_fcm, notify_by_vibrate } = await req.json();
 
-    if (!user_id || !product_id) {
+    if (!user_id || !product_id || !convenience_brand || !search_name) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
+    // product 소유 확인
+    const productCheck = await query(
+      `SELECT id FROM products WHERE id = $1 AND user_id = $2;`,
+      [product_id, user_id]
+    );
+
+    if (productCheck.rows.length === 0) {
+      return NextResponse.json(
+        { error: 'Product not found or not owned by user' },
+        { status: 404 }
+      );
+    }
+
     const result = await query(
-      `INSERT INTO wishlists (user_id, product_id, region, notify_by_fcm, notify_by_vibrate, is_active, created_at)
-       VALUES ($1, $2, $3, $4, $5, true, NOW())
-       RETURNING id, user_id, product_id, region, is_active, notify_by_fcm, notify_by_vibrate, created_at;`,
-      [user_id, product_id, region || null, notify_by_fcm !== false, notify_by_vibrate !== false]
+      `INSERT INTO search_stores (product_id, convenience_brand, search_name, region, notify_by_fcm, notify_by_vibrate, is_active, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, true, NOW())
+       RETURNING id, product_id, convenience_brand, search_name, region, notify_by_fcm, notify_by_vibrate, created_at;`,
+      [product_id, convenience_brand, search_name, region || null, notify_by_fcm !== false, notify_by_vibrate !== false]
     );
 
     return NextResponse.json(
@@ -64,12 +77,11 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    console.error('Create wishlist error:', error);
+    console.error('Create search store error:', error);
 
-    // UNIQUE 제약 위반 (중복)
     if (error.code === '23505') {
       return NextResponse.json(
-        { error: 'Wishlist already exists for this product and region' },
+        { error: 'This convenience store variant already exists for this product and region' },
         { status: 409 }
       );
     }

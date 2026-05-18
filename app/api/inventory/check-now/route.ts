@@ -1,56 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
-// POST - 수동 재고 갱신 (사용자 요청)
+// POST - 수동 재고 갱신 (편의점별)
 export async function POST(req: NextRequest) {
   try {
-    const { user_id, wishlist_id } = await req.json();
+    const { user_id, search_store_id } = await req.json();
 
-    if (!user_id || !wishlist_id) {
+    if (!user_id || !search_store_id) {
       return NextResponse.json(
-        { error: 'Missing user_id or wishlist_id' },
+        { error: 'Missing user_id or search_store_id' },
         { status: 400 }
       );
     }
 
-    // 찜 항목 조회
-    const wishlistResult = await query(
-      `SELECT w.id, w.product_id, w.user_id, w.region, p.name, p.brand
-       FROM wishlists w
-       JOIN products p ON w.product_id = p.id
-       WHERE w.id = $1 AND w.user_id = $2 AND w.is_active = true;`,
-      [wishlist_id, user_id]
+    // 편의점별 찜 항목 조회 (소유권 확인)
+    const searchStoreResult = await query(
+      `SELECT ss.id, ss.product_id, ss.convenience_brand, ss.search_name, ss.region,
+              p.actual_name
+       FROM search_stores ss
+       JOIN products p ON ss.product_id = p.id
+       WHERE ss.id = $1 AND p.user_id = $2 AND ss.is_active = true;`,
+      [search_store_id, user_id]
     );
 
-    if (wishlistResult.rows.length === 0) {
+    if (searchStoreResult.rows.length === 0) {
       return NextResponse.json(
-        { error: 'Wishlist not found' },
+        { error: 'Search store not found' },
         { status: 404 }
       );
     }
 
-    const wishlist = wishlistResult.rows[0];
+    const searchStore = searchStoreResult.rows[0];
 
-    // 해당 제품의 현재 재고 상태 조회
+    // 해당 편의점의 현재 재고 상태 조회
     const inventoryResult = await query(
-      `SELECT i.id, i.product_id, i.store_id, i.is_in_stock, i.checked_at,
+      `SELECT i.id, i.search_store_id, i.store_id, i.is_in_stock, i.checked_at,
               s.name as store_name, s.brand, s.address, s.region
        FROM inventory i
        JOIN stores s ON i.store_id = s.id
-       WHERE i.product_id = $1 ${wishlist.region ? 'AND s.region = $2' : ''}
+       WHERE i.search_store_id = $1 ${searchStore.region ? 'AND s.region = $2' : ''}
        ORDER BY s.region, s.name;`,
-      wishlist.region ? [wishlist.product_id, wishlist.region] : [wishlist.product_id]
+      searchStore.region
+        ? [search_store_id, searchStore.region]
+        : [search_store_id]
     );
 
     return NextResponse.json({
       success: true,
       data: {
         product: {
-          id: wishlist.product_id,
-          name: wishlist.name,
-          brand: wishlist.brand,
+          id: searchStore.product_id,
+          name: searchStore.actual_name,
+          search_name: searchStore.search_name,
         },
-        region: wishlist.region || '전국',
+        convenience_brand: searchStore.convenience_brand,
+        region: searchStore.region || '전국',
         inventory: inventoryResult.rows,
         in_stock_count: inventoryResult.rows.filter((i: any) => i.is_in_stock).length,
         total_stores: inventoryResult.rows.length,

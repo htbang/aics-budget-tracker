@@ -13,7 +13,9 @@
       "Bash(xargs -I {} dirname {})",
       "PowerShell(Get-ChildItem -Path \"C:\\\\Users\\\\Administrator\\\\Documents\\\\OneDrive\\\\user\\\\project\" -Filter \"package.json\" -Recurse -Depth 1 | ForEach-Object { $_.Directory.Name } | Select-Object -Unique)",
       "Bash(npm install *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)"
     ]
   }
 }

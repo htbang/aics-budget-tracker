@@ -10,18 +10,18 @@ export interface User {
 export interface Product {
   id: number;
   user_id: number;
-  name: string;
-  brand?: string;
+  actual_name: string;
   description?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
 }
 
-export interface Wishlist {
+export interface SearchStore {
   id: number;
-  user_id: number;
   product_id: number;
+  convenience_brand: 'seven' | 'gs' | 'cu' | 'emart' | 'lotte';
+  search_name: string;
   region?: string;
   is_active: boolean;
   notify_by_fcm: boolean;
@@ -54,9 +54,8 @@ export interface Inventory {
 
 export interface InventoryHistory {
   id: number;
-  wishlist_id: number;
+  search_store_id: number;
   store_id?: number;
-  product_id?: number;
   status_before?: boolean;
   status_after?: boolean;
   notified_at?: string;

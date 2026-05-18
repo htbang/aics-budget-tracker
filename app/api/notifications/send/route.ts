@@ -17,13 +17,13 @@ export async function POST(req: NextRequest) {
 
     const {
       user_id,
-      wishlist_id,
+      search_store_id,
       product_name,
+      convenience_brand,
       store_name,
-      message,
     } = await req.json();
 
-    if (!user_id || !wishlist_id || !product_name || !store_name) {
+    if (!user_id || !search_store_id || !product_name || !store_name) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -60,13 +60,14 @@ export async function POST(req: NextRequest) {
     const response = await messaging.send({
       token: fcmToken,
       notification: {
-        title: '재고 입고!',
-        body: `${product_name} - ${store_name}에 입고되었습니다!`,
+        title: '재고 입고! 🎉',
+        body: `[${convenience_brand}] ${product_name} - ${store_name}에 입고되었습니다!`,
       },
       webpush: {
         data: {
-          wishlist_id: wishlist_id.toString(),
+          search_store_id: search_store_id.toString(),
           product_name: product_name,
+          convenience_brand: convenience_brand,
           store_name: store_name,
         },
       },
@@ -75,10 +76,10 @@ export async function POST(req: NextRequest) {
 
     // 재고 변경 이력 기록
     const historyResult = await query(
-      `INSERT INTO inventory_history (wishlist_id, product_id, store_id, status_after, notified_at, notification_type, fcm_success, created_at)
-       VALUES ($1, NULL, NULL, true, NOW(), 'fcm', true, NOW())
+      `INSERT INTO inventory_history (search_store_id, status_after, notified_at, notification_type, fcm_success, created_at)
+       VALUES ($1, true, NOW(), 'fcm', true, NOW())
        RETURNING id;`,
-      [wishlist_id]
+      [search_store_id]
     );
 
     return NextResponse.json({
