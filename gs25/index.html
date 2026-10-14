@@ -59,7 +59,8 @@ td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
 .chip{padding:7px 11px;border-radius:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer}
 .chip.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
 .sum{font-size:13px;color:var(--sub);margin:2px 0 6px}.sum b{color:var(--ink)}
-.mv{display:flex;flex-direction:column;gap:2px}.mv button{padding:2px 7px;font-size:11px}
+.drag{font-size:22px;color:var(--sub);padding:6px 8px;cursor:grab;touch-action:none;user-select:none}
+.stop.ghost{opacity:.4}.stop.chosen{background:color-mix(in srgb,var(--gs) 12%,transparent)}
 .pinned .num{background:var(--warn)}
 #mapBar{position:absolute;top:8px;left:8px;right:8px;z-index:100;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
 #mapBar .chip{pointer-events:auto;box-shadow:0 1px 5px rgba(0,0,0,.25)}
@@ -102,7 +103,7 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
           <button class="chip" id="resetToday">오늘 초기화</button>
         </div>
         <div class="sum" id="sum"></div>
-        <div class="muted" style="margin-bottom:6px">매장 이름이나 지도 마커를 탭하면 <b>있음 → 없음 → 미확인</b> 순으로 바뀌어요. 개수는 적어도 되고 안 적어도 돼요.</div>
+        <div class="muted" style="margin-bottom:6px">매장 이름이나 지도 마커를 탭하면 <b>있음 → 없음 → 미확인</b> 순으로 바뀌어요.</div>
         <div id="storeList"></div>
       </div>
 
@@ -114,7 +115,7 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
           <label class="s">전기자전거 <input type="number" id="speed" value="20" min="8" max="30">km/h</label>
         </div>
         <div id="stops"></div>
-        <div class="muted" style="margin-top:8px">▲▼나 "다음으로"를 누르면 그 위치까지는 순서가 고정(주황 번호)되고, 나머지는 그 뒤에 이어서 다시 최적화해요. GPS 위치가 바뀌거나 체크할 때마다 순서를 다시 계산해요. 거리와 시간은 실제 자전거 도로 기준(OpenStreetMap, 설정한 속도 반영)이고, 불러오지 못하면 직선 추정(점선)으로 보여줘요.</div>
+        <div class="muted" style="margin-top:8px">≡ 을 잡고 끌어서 놓거나 "다음으로"를 누르면 그 위치까지는 순서가 고정(주황 번호)되고, 나머지는 그 뒤에 이어서 다시 최적화해요. GPS 위치가 바뀌거나 체크할 때마다 순서를 다시 계산해요. 거리와 시간은 실제 자전거 도로 기준(OpenStreetMap, 설정한 속도 반영)이고, 불러오지 못하면 직선 추정(점선)으로 보여줘요.</div>
       </div>
 
       <div class="view" id="v-log">
@@ -134,6 +135,7 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=tijknjlz53"></script>
 <!-- 카카오는 GS25 매장 검색에만 사용 -->
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5a47e29f45a5a1650dff8c887084e342&libraries=services&autoload=false"></script>
@@ -158,7 +160,7 @@ function load() {
 function newDay() { return { date: today(), stock: {}, done: {}, skip: {}, pinned: [] }; }
 // 재고값: 숫자(개수), -1 = 있음(개수 모름), 0 = 없음, undefined = 미확인
 const has = v => v > 0 || v === -1;
-const lbl = v => v === -1 ? '있음' : v > 0 ? v + '개' : v === 0 ? '없음' : '?';
+const lbl = v => has(v) ? '있음' : v === 0 ? '없음' : '?';
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
 function addLog(type, st, qty) {
   S.log.push({ t: Date.now(), type, id: st.id, name: st.name, qty: qty ?? null });
@@ -481,7 +483,6 @@ function renderList() {
     return `<div class="row ${rowCls(v)}" id="r-${s.id}">
       <div class="nm" data-cyc="${s.id}"><b data-cyc="${s.id}">${esc(s.name)}${d === 'buy' ? ' ✔' : d === 'miss' ? ' ✕' : ''}</b><span data-cyc="${s.id}">${fmtD(s.dist)} · ${esc(s.addr || '')}</span></div>
       <button class="st ${rowCls(v)}" data-cyc="${s.id}">${stTxt(v)}</button>
-      <input class="qty" inputmode="numeric" pattern="[0-9]*" data-q="${s.id}" value="${v > 0 ? v : ''}" placeholder="개수">
     </div>`;
   }).join('');
 }
@@ -519,7 +520,6 @@ function updateRow(id) {
   if (!row) return;
   row.className = 'row ' + rowCls(v);
   const b = row.querySelector('.st'); b.className = 'st ' + rowCls(v); b.textContent = stTxt(v);
-  const inp = row.querySelector('.qty'); if (document.activeElement !== inp) inp.value = v > 0 ? v : '';
 }
 $('#onlyHas').onclick = () => { S.onlyHas = !S.onlyHas; save(); renderList(); renderMarkers(); };
 $('#restZero').onclick = () => {
@@ -566,28 +566,45 @@ function renderRoute() {
       <button class="btn" data-skip="${n.id}">제외</button>
     </div></div>`;
   let cum = 0, cumT = 0, prev = origin();
-  $('#stops').innerHTML = stops.map((s, i) => {
+  if (dragging) return;
+  $('#stops').innerHTML = '<div id="stopList">' + stops.map((s, i) => {
     const seg = legs ? legs[i].distance : prev ? road(prev, s) : 0; cum += seg; prev = s;
     cumT += legs ? legs[i].duration / 60 : seg / 1000 / S.speed * 60;
-    return `<div class="stop ${S.day.pinned.includes(s.id) ? 'pinned' : ''}"><div class="num">${i+1}</div>
-      <div class="mv"><button class="btn" data-up="${s.id}" ${i ? '' : 'disabled'}>▲</button><button class="btn" data-down="${s.id}" ${i < stops.length - 1 ? '' : 'disabled'}>▼</button></div>
+    return `<div class="stop ${S.day.pinned.includes(s.id) ? 'pinned' : ''}" data-id="${s.id}"><div class="drag">≡</div><div class="num">${i+1}</div>
       <div style="flex:1;min-width:0"><b>${esc(s.name)}</b> <span style="color:var(--gs);font-weight:700">${lbl(S.day.stock[s.id])}</span>
       <div class="muted">+${fmtD(seg)} · 누적 ${fmtD(cum)} / ${Math.max(1, Math.round(cumT))}분</div>
       <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${i ? `<button class="btn sm" data-first="${s.id}">다음으로</button>` : ''}<button class="btn sm" data-skip="${s.id}">제외</button><button class="btn sm ok" data-buy="${s.id}">샀음</button><button class="btn sm no" data-miss="${s.id}">허탕</button></div></div></div>`;
-  }).join('') + (() => {
+  }).join('') + '</div>' + (() => {
     const sk = Object.keys(S.day.skip).filter(id => has(S.day.stock[id]) && !S.day.done[id]);
     return sk.length ? `<h3>경로에서 제외한 곳</h3>` + sk.map(id => `<div class="stop"><div class="num" style="background:#9ca3af">–</div><div style="flex:1">${esc(S.stores[id]?.name || id)} <span class="muted">${lbl(S.day.stock[id])}</span></div><button class="btn sm" data-unskip="${id}">다시 포함</button></div>`).join('') : '';
   })() + (() => {
     const fin = Object.entries(S.day.done);
     return fin.length ? `<h3>오늘 들른 곳</h3>` + fin.map(([id, r]) => `<div class="stop"><div class="num" style="background:${r === 'buy' ? 'var(--ok)' : 'var(--no)'}">${r === 'buy' ? '✔' : '✕'}</div><div style="flex:1">${esc(S.stores[id]?.name || id)}</div><button class="btn sm" data-undo="${id}">되돌리기</button></div>`).join('') : '';
   })();
+  initSortable();
+}
+// 끌어서 순서 바꾸기: 놓은 위치까지는 고정, 나머지는 그 뒤로 자동 최적화
+let dragging = false;
+function initSortable() {
+  const el = $('#stopList');
+  if (!el || !window.Sortable) return;
+  Sortable.create(el, {
+    handle: '.drag', animation: 150, ghostClass: 'ghost', chosenClass: 'chosen',
+    onStart: () => { dragging = true; },
+    onEnd: ev => {
+      dragging = false;
+      if (ev.oldIndex === ev.newIndex) return;
+      const order = [...el.querySelectorAll('.stop')].map(x => x.dataset.id);
+      S.day.pinned = order.slice(0, Math.max(ev.oldIndex, ev.newIndex) + 1);
+      save(); recalc();
+    }
+  });
 }
 document.addEventListener('click', e => {
   const t = e.target.dataset;
   if (t.buy) {
     const st = S.stores[t.buy];
-    const q = prompt(`${st.name}\n몇 개 샀어요?`, '1'); if (q === null) return;
-    S.day.done[st.id] = 'buy'; addLog('buy', st, Math.max(1, parseInt(q, 10) || 1));
+    S.day.done[st.id] = 'buy'; addLog('buy', st, null);
     flash('구매 기록됨 ' + new Date().toLocaleTimeString('ko', { hour: '2-digit', minute: '2-digit' }));
     recalc(); renderList(); renderLog();
   } else if (t.miss) {
@@ -638,10 +655,10 @@ function renderLog() {
     .sort((a, b) => (b.buys - a.buys) || (Object.keys(b.days).length - Object.keys(a.days).length));
   $('#stats').innerHTML = rows.length ? `<table><tr><th>매장</th><th>재고 본 날 (처음 본 시각)</th><th>구매</th></tr>${rows.map(b => {
     const ds = Object.entries(b.days).sort().slice(-5).map(([, t]) => `${dstr(t)} ${hm(t)}`).join('<br>');
-    return `<tr><td><b>${esc(b.name)}</b><div class="muted">최대 ${b.maxStock}개</div></td><td>${ds || '-'}</td><td>${b.buys}회 / ${b.qty}개</td></tr>`;
+    return `<tr><td><b>${esc(b.name)}</b></td><td>${ds || '-'}</td><td>${b.buys}회</td></tr>`;
   }).join('')}</table>` : '<p class="muted">아직 기록이 없어요.</p>';
   const buys = S.log.filter(l => l.type === 'buy').slice().reverse();
-  $('#buys').innerHTML = buys.length ? `<table><tr><th>날짜</th><th>시각</th><th>매장</th><th>개수</th></tr>${buys.map(l => `<tr><td>${dstr(l.t)}</td><td><b>${hm(l.t)}</b></td><td>${esc(l.name)}</td><td>${l.qty}</td></tr>`).join('')}</table>` : '<p class="muted">아직 구매 기록이 없어요.</p>';
+  $('#buys').innerHTML = buys.length ? `<table><tr><th>날짜</th><th>시각</th><th>매장</th></tr>${buys.map(l => `<tr><td>${dstr(l.t)}</td><td><b>${hm(l.t)}</b></td><td>${esc(l.name)}</td></tr>`).join('')}</table>` : '<p class="muted">아직 구매 기록이 없어요.</p>';
 }
 $('#exportBtn').onclick = async () => {
   const data = JSON.stringify({ stores: S.stores, log: S.log });
