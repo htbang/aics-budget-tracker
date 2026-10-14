@@ -49,9 +49,9 @@ header small{opacity:.9;font-size:12px}
 h3{font-size:15px;margin:16px 0 6px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
-.pin{background:#9ca3af;color:#fff;border-radius:14px;padding:3px 8px;font-size:12px;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer;transform:translateY(-50%)}
+.pin{background:#9ca3af;color:#fff;border-radius:14px;padding:3px 8px;font-size:12px;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer;transform:translate(-50%,-100%);display:inline-block}
 .pin.has{background:var(--gs)}.pin.zero{background:#d1d5db;color:#6b7280}.pin.done{background:var(--ok)}.pin.miss{background:var(--no)}
-.me{width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.25)}
+.me{transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.25)}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;z-index:99;display:none}
 label.s{font-size:13px;color:var(--sub);display:flex;align-items:center;gap:4px}
 label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
@@ -112,6 +112,8 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=tijknjlz53"></script>
+<!-- 카카오는 GS25 매장 검색에만 사용 -->
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5a47e29f45a5a1650dff8c887084e342&libraries=services&autoload=false"></script>
 <script>
 const KEY = 'gs25route.v1';
@@ -193,7 +195,7 @@ function targets() {
 }
 function recalc() {
   const ts = targets();
-  const start = me || (map ? { lat: map.getCenter().getLat(), lng: map.getCenter().getLng() } : ts[0]);
+  const start = me || (map ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : ts[0]);
   route = start ? solve(start, ts).map(i => ts[i].id) : [];
   lastCalcPos = me;
   renderRoute(); renderMarkers();
@@ -202,13 +204,13 @@ function recalc() {
 // ---------- 지도 ----------
 function initMap() {
   const c = S.center || { lat: 37.3966, lng: 126.9630 };
-  map = new kakao.maps.Map($('#map'), { center: new kakao.maps.LatLng(c.lat, c.lng), level: 5 });
-  kakao.maps.event.addListener(map, 'idle', () => {
-    const p = map.getCenter(); S.center = { lat: p.getLat(), lng: p.getLng() }; save();
+  map = new naver.maps.Map('map', { center: new naver.maps.LatLng(c.lat, c.lng), zoom: 15, scaleControl: false, mapDataControl: false });
+  naver.maps.Event.addListener(map, 'idle', () => {
+    const p = map.getCenter(); S.center = { lat: p.lat(), lng: p.lng() }; save();
   });
   renderAll();
   startGps();
-  if (!Object.keys(S.stores).length) setTimeout(findStores, 600);
+  if (!Object.keys(S.stores).length && window.kakao?.maps?.services) findStores();
 }
 
 function renderMarkers() {
@@ -224,21 +226,22 @@ function renderMarkers() {
     else if (q === 0) { cls += ' zero'; txt = '0'; }
     const el = document.createElement('div'); el.className = cls; el.textContent = txt; el.title = st.name;
     el.onclick = () => { switchTab('check'); $('#q').value = ''; renderList(); document.getElementById('r-' + st.id)?.scrollIntoView({ block: 'center' }); flash(st.name); };
-    const o = new kakao.maps.CustomOverlay({ position: new kakao.maps.LatLng(st.lat, st.lng), content: el, yAnchor: 1, zIndex: q > 0 ? 3 : 1 });
-    o.setMap(map); overlays[st.id] = o;
+    const o = new naver.maps.Marker({ map, position: new naver.maps.LatLng(st.lat, st.lng), icon: { content: el, anchor: new naver.maps.Point(0, 0) }, zIndex: q > 0 ? 3 : 1, title: st.name });
+    overlays[st.id] = o;
   }
   if (routeLine) routeLine.setMap(null);
-  const path = [...(me ? [me] : []), ...route.map(id => S.stores[id])].map(p => new kakao.maps.LatLng(p.lat, p.lng));
+  routeLine = null;
+  const path = [...(me ? [me] : []), ...route.map(id => S.stores[id])].map(p => new naver.maps.LatLng(p.lat, p.lng));
   if (path.length > 1) {
-    routeLine = new kakao.maps.Polyline({ path, strokeWeight: 4, strokeColor: '#00b3d6', strokeOpacity: .85, strokeStyle: 'shortdash' });
-    routeLine.setMap(map);
+    routeLine = new naver.maps.Polyline({ map, path, strokeWeight: 4, strokeColor: '#00b3d6', strokeOpacity: .85, strokeStyle: 'shortdash' });
   }
 }
 
 function findStores() {
   if (!map) return;
+  if (!window.kakao?.maps?.services) return flash('매장 검색(카카오)을 불러오지 못했어요');
   const ps = new kakao.maps.services.Places();
-  const center = map.getCenter();
+  const nc = map.getCenter(), center = new kakao.maps.LatLng(nc.lat(), nc.lng());
   const radius = Math.min(20000, Math.round((+$('#radius').value || 2) * 1000));
   S.radius = radius / 1000;
   let found = 0;
@@ -267,8 +270,8 @@ function startGps() {
     me = { lat: p.coords.latitude, lng: p.coords.longitude };
     $('#gps').textContent = `📍 GPS ±${Math.round(p.coords.accuracy)}m`;
     if (map) {
-      const pos = new kakao.maps.LatLng(me.lat, me.lng);
-      if (!meOverlay) { const el = document.createElement('div'); el.className = 'me'; meOverlay = new kakao.maps.CustomOverlay({ position: pos, content: el, zIndex: 9 }); meOverlay.setMap(map); }
+      const pos = new naver.maps.LatLng(me.lat, me.lng);
+      if (!meOverlay) meOverlay = new naver.maps.Marker({ map, position: pos, icon: { content: '<div class="me"></div>', anchor: new naver.maps.Point(0, 0) }, zIndex: 9 });
       else meOverlay.setPosition(pos);
       if (first) { map.setCenter(pos); first = false; }
     }
@@ -436,7 +439,7 @@ function flash(msg) { const t = $('#toast'); t.textContent = msg; t.style.displa
 function switchTab(v) {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v));
-  if (map) setTimeout(() => map.relayout(), 50);
+  if (map) setTimeout(() => map.autoResize(), 50);
 }
 document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.v));
 function renderAll() { renderList(); recalc(); renderLog(); }
@@ -447,8 +450,9 @@ setInterval(() => { if (S.day.date !== today()) { S.day = { date: today(), stock
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') navigator.wakeLock?.request('screen').catch(() => {}); });
 navigator.wakeLock?.request('screen').catch(() => {});
 
-if (window.kakao?.maps) kakao.maps.load(initMap);
-else { $('#map').innerHTML = '<p style="padding:20px">카카오 지도를 불러오지 못했어요.</p>'; renderAll(); }
+window.kakao?.maps?.load(() => { if (map && !Object.keys(S.stores).length) findStores(); });
+if (window.naver?.maps) initMap();
+else { $('#map').innerHTML = '<p style="padding:20px">네이버 지도를 불러오지 못했어요.</p>'; renderAll(); }
 </script>
 </body>
 </html>
