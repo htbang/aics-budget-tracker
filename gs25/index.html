@@ -52,6 +52,14 @@ td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
 .pin{background:#9ca3af;color:#fff;border-radius:14px;padding:3px 8px;font-size:12px;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer;transform:translate(-50%,-100%);display:inline-block}
 .pin.has{background:var(--gs)}.pin.zero{background:#d1d5db;color:#6b7280}.pin.done{background:var(--ok)}.pin.miss{background:var(--no)}
 .me{transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.25)}
+.st{min-width:56px;padding:8px 6px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--sub);font-weight:700;font-size:14px;cursor:pointer}
+.st.has{background:var(--gs);border-color:var(--gs);color:#fff}.st.zero{background:var(--card);color:var(--no);border-color:var(--no)}
+.row .nm{cursor:pointer;user-select:none}
+.chip{padding:7px 11px;border-radius:16px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-size:13px;font-weight:600;cursor:pointer}
+.chip.on{background:var(--ink);color:var(--card);border-color:var(--ink)}
+.sum{font-size:13px;color:var(--sub);margin:2px 0 6px}.sum b{color:var(--ink)}
+.mv{display:flex;flex-direction:column;gap:2px}.mv button{padding:2px 7px;font-size:11px}
+.pinned .num{background:var(--warn)}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;z-index:99;display:none}
 label.s{font-size:13px;color:var(--sub);display:flex;align-items:center;gap:4px}
 label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
@@ -79,9 +87,14 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
         </div>
         <div class="bar">
           <input type="search" id="q" placeholder="매장 이름 검색 (예: 관양)">
-          <button class="btn sm" id="resetToday">오늘 재고 초기화</button>
         </div>
-        <div class="muted" style="margin-bottom:6px">GS 앱에 나온 개수를 입력하세요. 비우면 미확인, 0이면 없음이에요. 재고가 있는 매장만 경로에 들어가요.</div>
+        <div class="bar">
+          <button class="chip" id="onlyHas">재고 있는 곳만</button>
+          <button class="chip" id="restZero">미확인 → 전부 없음</button>
+          <button class="chip" id="resetToday">오늘 초기화</button>
+        </div>
+        <div class="sum" id="sum"></div>
+        <div class="muted" style="margin-bottom:6px">매장 이름이나 지도 마커를 탭하면 <b>있음 → 없음 → 미확인</b> 순으로 바뀌어요. 개수는 적어도 되고 안 적어도 돼요.</div>
         <div id="storeList"></div>
       </div>
 
@@ -89,10 +102,11 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
         <div id="nextCard"></div>
         <div class="bar">
           <button class="btn" id="kakaoAll">카카오맵 전체경로</button>
+          <button class="btn" id="autoOrder" style="display:none">자동 순서로</button>
           <label class="s">전기자전거 <input type="number" id="speed" value="20" min="8" max="30">km/h</label>
         </div>
         <div id="stops"></div>
-        <div class="muted" style="margin-top:8px">GPS 위치가 바뀌거나 체크할 때마다 방문 순서를 다시 계산해요. 거리는 직선거리에 도로 보정(×1.35)을 곱한 추정치예요.</div>
+        <div class="muted" style="margin-top:8px">▲▼나 "다음으로"를 누르면 그 위치까지는 순서가 고정(주황 번호)되고, 나머지는 그 뒤에 이어서 다시 최적화해요. GPS 위치가 바뀌거나 체크할 때마다 순서를 다시 계산해요. 거리는 직선거리에 도로 보정(×1.35)을 곱한 추정치예요.</div>
       </div>
 
       <div class="view" id="v-log">
@@ -129,9 +143,14 @@ function load() {
   let s; try { s = JSON.parse(localStorage.getItem(KEY)); } catch {}
   s = s || {};
   s.stores ||= {}; s.log ||= []; s.speed ||= 20; s.radius ||= 2;
-  if (!s.day || s.day.date !== today()) s.day = { date: today(), stock: {}, done: {} };
+  if (!s.day || s.day.date !== today()) s.day = newDay();
+  s.day.skip ||= {}; s.day.pinned ||= [];
   return s;
 }
+function newDay() { return { date: today(), stock: {}, done: {}, skip: {}, pinned: [] }; }
+// 재고값: 숫자(개수), -1 = 있음(개수 모름), 0 = 없음, undefined = 미확인
+const has = v => v > 0 || v === -1;
+const lbl = v => v === -1 ? '있음' : v > 0 ? v + '개' : v === 0 ? '없음' : '?';
 function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
 function addLog(type, st, qty) {
   S.log.push({ t: Date.now(), type, id: st.id, name: st.name, qty: qty ?? null });
@@ -192,12 +211,14 @@ function solve(start, pts) {
 
 function origin() { return me || (map ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : S.center); }
 function targets() {
-  return Object.values(S.stores).filter(s => S.day.stock[s.id] > 0 && !S.day.done[s.id]);
+  return Object.values(S.stores).filter(s => has(S.day.stock[s.id]) && !S.day.done[s.id] && !S.day.skip[s.id]);
 }
 function recalc() {
-  const ts = targets();
-  const start = origin() || ts[0];
-  route = start ? solve(start, ts).map(i => ts[i].id) : [];
+  const ts = targets(), ids = new Set(ts.map(s => s.id));
+  S.day.pinned = S.day.pinned.filter(id => ids.has(id));
+  const fixed = S.day.pinned, rest = ts.filter(s => !fixed.includes(s.id));
+  const start = fixed.length ? S.stores[fixed[fixed.length - 1]] : (origin() || rest[0]);
+  route = [...fixed, ...(start ? solve(start, rest).map(i => rest[i].id) : [])];
   lastCalcPos = me;
   renderRoute(); renderMarkers();
 }
@@ -220,15 +241,16 @@ function renderMarkers() {
   Object.values(overlays).forEach(o => o.setMap(null)); overlays = {};
   for (const st of Object.values(S.stores)) {
     const q = S.day.stock[st.id], done = S.day.done[st.id];
+    if (S.onlyHas && !has(q) && !done) continue;
     const idx = route.indexOf(st.id);
     let cls = 'pin', txt = 'GS';
     if (done === 'buy') { cls += ' done'; txt = '✔ 구매'; }
     else if (done === 'miss') { cls += ' miss'; txt = '✕ 허탕'; }
-    else if (q > 0) { cls += ' has'; txt = (idx >= 0 ? (idx+1) + '. ' : '') + q + '개'; }
+    else if (has(q)) { cls += ' has'; txt = (idx >= 0 ? (idx+1) + '. ' : S.day.skip[st.id] ? '제외 ' : '') + lbl(q); }
     else if (q === 0) { cls += ' zero'; txt = '0'; }
     const el = document.createElement('div'); el.className = cls; el.textContent = txt; el.title = st.name;
-    el.onclick = () => { switchTab('check'); $('#q').value = ''; renderList(); document.getElementById('r-' + st.id)?.scrollIntoView({ block: 'center' }); flash(st.name); };
-    const o = new naver.maps.Marker({ map, position: new naver.maps.LatLng(st.lat, st.lng), icon: { content: el, anchor: new naver.maps.Point(0, 0) }, zIndex: q > 0 ? 3 : 1, title: st.name });
+    el.onclick = () => { cycle(st.id); flash(`${st.name}: ${lbl(S.day.stock[st.id])}`); document.getElementById('r-' + st.id)?.scrollIntoView({ block: 'nearest' }); };
+    const o = new naver.maps.Marker({ map, position: new naver.maps.LatLng(st.lat, st.lng), icon: { content: el, anchor: new naver.maps.Point(0, 0) }, zIndex: has(q) ? 3 : 1, title: st.name });
     overlays[st.id] = o;
   }
   if (routeLine) routeLine.setMap(null);
@@ -291,44 +313,71 @@ function renderList() {
   const ref = origin();
   const list = Object.values(S.stores)
     .filter(s => !q || s.name.includes(q) || (s.addr || '').includes(q))
+    .filter(s => !S.onlyHas || has(S.day.stock[s.id]) || S.day.done[s.id])
     .map(s => ({ ...s, dist: ref ? hav(ref, s) : 0 }))
     .sort((a, b) => a.dist - b.dist);
+  renderSum();
+  $('#onlyHas').classList.toggle('on', !!S.onlyHas);
   if (!list.length) { $('#storeList').innerHTML = '<p class="muted">지도를 동네로 옮긴 뒤 "주변 GS25 찾기"를 누르세요.</p>'; return; }
   $('#storeList').innerHTML = list.map(s => {
     const v = S.day.stock[s.id], d = S.day.done[s.id];
-    const cls = v > 0 ? 'has' : v === 0 ? 'zero' : '';
-    return `<div class="row ${cls}" id="r-${s.id}">
-      <div class="nm"><b>${esc(s.name)}${d === 'buy' ? ' ✔' : d === 'miss' ? ' ✕' : ''}</b><span>${fmtD(s.dist)} · ${esc(s.addr || '')}</span></div>
-      <button class="btn sm" data-z="${s.id}">0</button>
-      <input class="qty" inputmode="numeric" pattern="[0-9]*" data-q="${s.id}" value="${v ?? ''}" placeholder="?">
+    return `<div class="row ${rowCls(v)}" id="r-${s.id}">
+      <div class="nm" data-cyc="${s.id}"><b data-cyc="${s.id}">${esc(s.name)}${d === 'buy' ? ' ✔' : d === 'miss' ? ' ✕' : ''}</b><span data-cyc="${s.id}">${fmtD(s.dist)} · ${esc(s.addr || '')}</span></div>
+      <button class="st ${rowCls(v)}" data-cyc="${s.id}">${stTxt(v)}</button>
+      <input class="qty" inputmode="numeric" pattern="[0-9]*" data-q="${s.id}" value="${v > 0 ? v : ''}" placeholder="개수">
     </div>`;
   }).join('');
 }
+$('#storeList').addEventListener('click', e => {
+  const id = e.target.dataset.cyc; if (id) cycle(id);
+});
+const rowCls = v => has(v) ? 'has' : v === 0 ? 'zero' : '';
+const stTxt = v => has(v) ? '있음' : v === 0 ? '없음' : '?';
+// 탭할 때마다 미확인 → 있음 → 없음 → 미확인
+function cycle(id) {
+  const v = S.day.stock[id];
+  setStock(id, v === undefined ? -1 : has(v) ? 0 : undefined);
+}
+// 개수 입력칸: 비우면 있음(개수 모름) 유지, 0이면 없음
 $('#storeList').addEventListener('change', e => {
   const id = e.target.dataset.q; if (!id) return;
-  setStock(id, e.target.value);
+  const raw = e.target.value.trim();
+  setStock(id, raw === '' ? (has(S.day.stock[id]) ? -1 : undefined) : Math.max(0, parseInt(raw, 10) || 0));
 });
-$('#storeList').addEventListener('click', e => {
-  const id = e.target.dataset.z; if (!id) return;
-  setStock(id, '0');
-});
-function setStock(id, raw) {
+function setStock(id, v, quiet) {
   const st = S.stores[id];
-  if (raw === '' || raw == null) delete S.day.stock[id];
-  else {
-    const n = Math.max(0, parseInt(raw, 10) || 0);
-    S.day.stock[id] = n;
-    addLog('stock', st, n);
-  }
-  save(); recalc();
-  const row = document.getElementById('r-' + id), v = S.day.stock[id];
-  if (row) { row.classList.toggle('has', v > 0); row.classList.toggle('zero', v === 0); row.querySelector('.qty').value = v ?? ''; }
+  if (v === undefined) delete S.day.stock[id];
+  else { S.day.stock[id] = v; addLog('stock', st, v === -1 ? null : v); }
+  if (!has(v)) delete S.day.skip[id];
+  if (quiet) return;
+  save(); recalc(); updateRow(id);
 }
+function renderSum() {
+  const all = Object.values(S.stores), cnt = f => all.filter(x => f(S.day.stock[x.id])).length;
+  $('#sum').innerHTML = `재고 <b>${cnt(has)}</b>곳 · 없음 ${cnt(v => v === 0)} · 미확인 ${cnt(v => v === undefined)}`;
+}
+function updateRow(id) {
+  renderSum();
+  const row = document.getElementById('r-' + id), v = S.day.stock[id];
+  if (!row) return;
+  row.className = 'row ' + rowCls(v);
+  const b = row.querySelector('.st'); b.className = 'st ' + rowCls(v); b.textContent = stTxt(v);
+  const inp = row.querySelector('.qty'); if (document.activeElement !== inp) inp.value = v > 0 ? v : '';
+}
+$('#onlyHas').onclick = () => { S.onlyHas = !S.onlyHas; save(); renderList(); renderMarkers(); };
+$('#restZero').onclick = () => {
+  const q = $('#q').value.trim();
+  const ids = Object.values(S.stores).filter(s => S.day.stock[s.id] === undefined && (!q || s.name.includes(q) || (s.addr || '').includes(q))).map(s => s.id);
+  if (!ids.length) return flash('미확인 매장이 없어요');
+  if (!confirm(`미확인 ${ids.length}곳을 모두 "없음"으로 바꿀까요?`)) return;
+  ids.forEach(id => setStock(id, 0, true));
+  save(); renderList(); recalc();
+};
 $('#q').addEventListener('input', renderList);
 $('#findBtn').onclick = findStores;
 $('#resetToday').onclick = () => {
   if (!confirm('오늘 입력한 재고와 방문 표시를 지울까요? (기록 탭의 로그는 남아요)')) return;
-  S.day = { date: today(), stock: {}, done: {} }; save(); renderAll();
+  S.day = newDay(); save(); renderAll();
 };
 
 // ---------- 화면: 경로 ----------
@@ -343,31 +392,33 @@ function kakaoLink(stops) {
 }
 function renderRoute() {
   const stops = route.map(id => S.stores[id]).filter(Boolean);
-  if (!stops.length) {
-    $('#nextCard').innerHTML = `<div class="next"><h2>갈 곳이 없어요</h2><div class="meta">① 재고 체크 탭에서 재고가 있는 매장의 개수를 입력하세요.</div></div>`;
-    $('#stops').innerHTML = ''; return;
-  }
+  $('#autoOrder').style.display = S.day.pinned.length ? '' : 'none';
   const n = stops[0];
-  const o = origin(), d0 = o ? road(o, n) : null;
-  const arrived = me && hav(me, n) < ARRIVE_M;
-  $('#nextCard').innerHTML = `<div class="next ${arrived ? 'arrived' : ''}">
+  const o = origin(), d0 = o && n ? road(o, n) : null;
+  const arrived = me && n && hav(me, n) < ARRIVE_M;
+  $('#nextCard').innerHTML = !n ? `<div class="next"><h2>갈 곳이 없어요</h2><div class="meta">① 재고 체크 탭에서 재고 있는 매장을 탭해 '있음'으로 표시하세요.</div></div>` : `<div class="next ${arrived ? 'arrived' : ''}">
     <div class="muted">${arrived ? '🎯 도착했어요!' : '다음 목적지'}</div>
-    <h2>${esc(n.name)} <span style="color:var(--gs)">${S.day.stock[n.id]}개</span></h2>
+    <h2>${esc(n.name)} <span style="color:var(--gs)">${lbl(S.day.stock[n.id])}</span></h2>
     <div class="meta">${d0 != null ? `${me ? '' : '(지도 중심 기준) '}${fmtD(d0)} · 약 ${mins(d0)}분` : ''} · ${esc(n.addr || '')}</div>
     <div class="acts">
       ${isMobile ? `<a class="btn p" href="${naverLink(n)}">네이버맵 길안내</a>` : ''}
       <a class="btn ${isMobile ? '' : 'p'}" href="${kakaoLink([n])}" target="_blank">카카오맵</a>
       <button class="btn ok" data-buy="${n.id}">샀음</button>
       <button class="btn no" data-miss="${n.id}">허탕</button>
+      <button class="btn" data-skip="${n.id}">제외</button>
     </div></div>`;
   let cum = 0, prev = origin();
   $('#stops').innerHTML = stops.map((s, i) => {
     const seg = prev ? road(prev, s) : 0; cum += seg; prev = s;
-    return `<div class="stop"><div class="num">${i+1}</div>
-      <div style="flex:1;min-width:0"><b>${esc(s.name)}</b> <span style="color:var(--gs);font-weight:700">${S.day.stock[s.id]}개</span>
-      <div class="muted">+${fmtD(seg)} · 누적 ${fmtD(cum)} / ${mins(cum)}분</div></div>
-      <button class="btn sm ok" data-buy="${s.id}">샀음</button><button class="btn sm no" data-miss="${s.id}">허탕</button></div>`;
+    return `<div class="stop ${S.day.pinned.includes(s.id) ? 'pinned' : ''}"><div class="num">${i+1}</div>
+      <div class="mv"><button class="btn" data-up="${s.id}" ${i ? '' : 'disabled'}>▲</button><button class="btn" data-down="${s.id}" ${i < stops.length - 1 ? '' : 'disabled'}>▼</button></div>
+      <div style="flex:1;min-width:0"><b>${esc(s.name)}</b> <span style="color:var(--gs);font-weight:700">${lbl(S.day.stock[s.id])}</span>
+      <div class="muted">+${fmtD(seg)} · 누적 ${fmtD(cum)} / ${mins(cum)}분</div>
+      <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${i ? `<button class="btn sm" data-first="${s.id}">다음으로</button>` : ''}<button class="btn sm" data-skip="${s.id}">제외</button><button class="btn sm ok" data-buy="${s.id}">샀음</button><button class="btn sm no" data-miss="${s.id}">허탕</button></div></div></div>`;
   }).join('') + (() => {
+    const sk = Object.keys(S.day.skip).filter(id => has(S.day.stock[id]) && !S.day.done[id]);
+    return sk.length ? `<h3>경로에서 제외한 곳</h3>` + sk.map(id => `<div class="stop"><div class="num" style="background:#9ca3af">–</div><div style="flex:1">${esc(S.stores[id]?.name || id)} <span class="muted">${lbl(S.day.stock[id])}</span></div><button class="btn sm" data-unskip="${id}">다시 포함</button></div>`).join('') : '';
+  })() + (() => {
     const fin = Object.entries(S.day.done);
     return fin.length ? `<h3>오늘 들른 곳</h3>` + fin.map(([id, r]) => `<div class="stop"><div class="num" style="background:${r === 'buy' ? 'var(--ok)' : 'var(--no)'}">${r === 'buy' ? '✔' : '✕'}</div><div style="flex:1">${esc(S.stores[id]?.name || id)}</div><button class="btn sm" data-undo="${id}">되돌리기</button></div>`).join('') : '';
   })();
@@ -383,6 +434,17 @@ document.addEventListener('click', e => {
   } else if (t.miss) {
     const st = S.stores[t.miss];
     S.day.done[st.id] = 'miss'; addLog('miss', st, 0); recalc(); renderList(); renderLog();
+  } else if (t.skip) {
+    S.day.skip[t.skip] = true; save(); recalc(); flash('경로에서 제외했어요');
+  } else if (t.unskip) {
+    delete S.day.skip[t.unskip]; save(); recalc();
+  } else if (t.first || t.up || t.down) {
+    const id = t.first || t.up || t.down, i = route.indexOf(id);
+    const to = t.first ? 0 : t.up ? i - 1 : i + 1;
+    const r = route.filter(x => x !== id); r.splice(to, 0, id);
+    // 옮긴 위치까지는 순서 고정, 그 뒤는 자동 최적화 ('다음으로'는 그 매장만 고정)
+    S.day.pinned = r.slice(0, (t.first ? to : Math.max(to, i)) + 1);
+    save(); recalc();
   } else if (t.undo) {
     delete S.day.done[t.undo]; save(); recalc(); renderList();
   }
@@ -393,6 +455,7 @@ $('#kakaoAll').onclick = () => {
   if (stops.length > 6) flash('카카오 링크는 경유지 수가 제한돼서 앞쪽 6곳만 넣었어요');
   window.open(kakaoLink(stops), '_blank');
 };
+$('#autoOrder').onclick = () => { S.day.pinned = []; save(); recalc(); };
 $('#speed').value = S.speed;
 $('#speed').onchange = e => { S.speed = +e.target.value || 20; save(); renderRoute(); };
 $('#radius').value = S.radius;
@@ -405,10 +468,10 @@ function renderLog() {
   const by = {};
   for (const l of S.log) {
     const b = by[l.id] ||= { name: l.name, days: {}, buys: 0, qty: 0, maxStock: 0 };
-    if (l.type === 'stock' && l.qty > 0) {
+    if (l.type === 'stock' && (l.qty > 0 || l.qty === null)) {
       const day = new Date(l.t).toLocaleDateString('sv');
       if (!b.days[day] || l.t < b.days[day]) b.days[day] = l.t;
-      b.maxStock = Math.max(b.maxStock, l.qty);
+      b.maxStock = Math.max(b.maxStock, l.qty || 0);
     }
     if (l.type === 'buy') { b.buys++; b.qty += l.qty || 0; }
   }
@@ -449,7 +512,7 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => switchT
 function renderAll() { renderList(); recalc(); renderLog(); }
 
 // 날짜가 바뀌면 오늘 재고 초기화
-setInterval(() => { if (S.day.date !== today()) { S.day = { date: today(), stock: {}, done: {} }; save(); renderAll(); } }, 60000);
+setInterval(() => { if (S.day.date !== today()) { S.day = newDay(); save(); renderAll(); } }, 60000);
 // 화면 꺼짐 방지 (지원 기기만)
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') navigator.wakeLock?.request('screen').catch(() => {}); });
 navigator.wakeLock?.request('screen').catch(() => {});
