@@ -49,8 +49,9 @@ header small{opacity:.9;font-size:12px}
 h3{font-size:15px;margin:16px 0 6px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
-.pin{background:#9ca3af;color:#fff;border-radius:14px;padding:5px 10px;font-size:13px;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer;transform:translate(-50%,-100%);display:inline-block}
-.pin.has{background:var(--gs)}.pin.zero{background:#d1d5db;color:#6b7280}.pin.done{background:var(--ok)}.pin.miss{background:var(--no)}
+.pin{position:relative;width:12px;height:12px;border-radius:50%;background:#8b95a1;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.45);transform:translate(-50%,-50%);display:grid;place-items:center;color:#fff;font-size:10px;font-weight:800;line-height:1;cursor:pointer}
+.pin::after{content:'';position:absolute;inset:-11px}
+.pin.has{width:19px;height:19px;background:#0a7cff}.pin.zero{width:9px;height:9px;background:#cfd4da}.pin.done{width:17px;height:17px;background:var(--ok)}.pin.miss{width:15px;height:15px;background:var(--no)}.pin.skip{background:#7aa7d9}
 .me{transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.25)}
 .st{min-width:56px;padding:8px 6px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--sub);font-weight:700;font-size:14px;cursor:pointer}
 .st.has{background:var(--gs);border-color:var(--gs);color:#fff}.st.zero{background:var(--card);color:var(--no);border-color:var(--no)}
@@ -65,9 +66,8 @@ td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
 #mapBar .chip.mode{background:var(--gs);border-color:var(--gs);color:#fff}
 #sheet{position:absolute;left:8px;right:8px;bottom:8px;z-index:100;background:var(--card);border-radius:12px;padding:10px;box-shadow:0 2px 12px rgba(0,0,0,.3);display:none}
 #sheet .acts{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
-.checking .pin{opacity:.55;transform:translate(-50%,-100%) scale(.9)}
-.checking .pin.has{opacity:1;transform:translate(-50%,-100%) scale(1.2);border-width:3px;box-shadow:0 0 0 3px rgba(0,179,214,.35),0 2px 6px rgba(0,0,0,.35)}
-.checking .pin.done,.checking .pin.miss{opacity:.8}
+.checking .pin:not(.has){opacity:.6}
+
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;z-index:99;display:none}
 label.s{font-size:13px;color:var(--sub);display:flex;align-items:center;gap:4px}
 label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
@@ -114,7 +114,7 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
           <label class="s">전기자전거 <input type="number" id="speed" value="20" min="8" max="30">km/h</label>
         </div>
         <div id="stops"></div>
-        <div class="muted" style="margin-top:8px">▲▼나 "다음으로"를 누르면 그 위치까지는 순서가 고정(주황 번호)되고, 나머지는 그 뒤에 이어서 다시 최적화해요. GPS 위치가 바뀌거나 체크할 때마다 순서를 다시 계산해요. 거리와 시간은 실제 자전거 도로 기준(OpenStreetMap)이고, 불러오지 못하면 직선 추정(점선)으로 보여줘요.</div>
+        <div class="muted" style="margin-top:8px">▲▼나 "다음으로"를 누르면 그 위치까지는 순서가 고정(주황 번호)되고, 나머지는 그 뒤에 이어서 다시 최적화해요. GPS 위치가 바뀌거나 체크할 때마다 순서를 다시 계산해요. 거리와 시간은 실제 자전거 도로 기준(OpenStreetMap, 설정한 속도 반영)이고, 불러오지 못하면 직선 추정(점선)으로 보여줘요.</div>
       </div>
 
       <div class="view" id="v-log">
@@ -217,46 +217,85 @@ function solve(start, pts, cost = road) {
   return ord;
 }
 
-// ---------- 실제 자전거 경로 (OpenStreetMap 기반 OSRM) ----------
-const OSRM = 'https://routing.openstreetmap.de/routed-bike';
-const OSRM_KMH = 15;              // OSRM 자전거 프로필 기준 속도 → 전기자전거 속도로 환산
-let mtx = null, rt = null, fetchT = null;
-const rnd = p => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`;
+// ---------- 실제 자전거 경로 (OpenStreetMap 기반 Valhalla, 키 불필요) ----------
+const VAL = 'https://valhalla1.openstreetmap.de';
+let mtx = null, rt = null, fetchT = null, fetchSeq = 0;
 const okey = () => { const o = origin(); return o ? o.lat.toFixed(3) + ',' + o.lng.toFixed(3) : '-'; };
-// 두 지점 사이 비용(초): 실제 자전거 이동시간이 있으면 그것, 없으면 직선 추정
-function cost(a, b) {
-  if (mtx) { const i = mtx.idx[a.id ?? '@o'], j = mtx.idx[b.id ?? '@o']; if (i != null && j != null && mtx.D[i][j] != null) return mtx.D[i][j]; }
-  return road(a, b) / (OSRM_KMH / 3.6);
+const bike = () => ({ costing: 'bicycle', costing_options: { bicycle: { bicycle_type: 'Hybrid', cycling_speed: S.speed, use_roads: 0.5 } } });
+const loc = p => ({ lat: +p.lat.toFixed(6), lon: +p.lng.toFixed(6) });
+async function val(path, body) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), 10000);
+  try {
+    const r = await fetch(`${VAL}/${path}?json=${encodeURIComponent(JSON.stringify(body))}`, { signal: ac.signal });
+    if (!r.ok) throw new Error(path + ' ' + r.status);
+    return await r.json();
+  } finally { clearTimeout(t); }
 }
-function scheduleFetch() { clearTimeout(fetchT); fetchT = setTimeout(fetchReal, 700); }
+// Valhalla 경로 모양(polyline6) 해독
+function decode6(str) {
+  const out = []; let i = 0, lat = 0, lng = 0;
+  while (i < str.length) {
+    for (const k of [0, 1]) {
+      let b, sh = 0, r = 0;
+      do { b = str.charCodeAt(i++) - 63; r |= (b & 31) << sh; sh += 5; } while (b >= 32);
+      const d = r & 1 ? ~(r >> 1) : r >> 1;
+      if (k === 0) lat += d; else lng += d;
+    }
+    out.push([lng / 1e6, lat / 1e6]);
+  }
+  return out;
+}
+// 두 지점 사이 비용(초): 실제 자전거 시간이 있으면 그것, 없으면 직선 추정
+function cost(a, b) {
+  if (mtx) { const i = mtx.idx[a.id ?? '@o'], j = mtx.idx[b.id ?? '@o']; if (i != null && j != null && mtx.D[i]?.[j] != null) return mtx.D[i][j]; }
+  return road(a, b) / (S.speed / 3.6);
+}
+function scheduleFetch() { clearTimeout(fetchT); fetchT = setTimeout(fetchReal, 600); }
+async function fetchRoute(seq) {
+  const o = origin(), ids = [...route];
+  if (!o || !ids.length) return;
+  const rk = ids.join(','), ok = okey();
+  if (rt && rt.key === rk && rt.okey === ok) return;
+  const pts = [o, ...ids.map(id => S.stores[id])];
+  const legs = [], coords = [];
+  // 한 번에 최대 20지점씩 나눠 요청
+  for (let i = 0; i < pts.length - 1; i += 19) {
+    const chunk = pts.slice(i, i + 20);
+    const r = await val('route', { locations: chunk.map(loc), ...bike(), directions_type: 'none', units: 'kilometers' });
+    for (const l of r.trip.legs) { legs.push({ distance: l.summary.length * 1000, duration: l.summary.time }); coords.push(...decode6(l.shape)); }
+  }
+  if (seq !== fetchSeq) return;
+  rt = { key: rk, okey: ok, legs, coords };
+  renderRoute(); renderMarkers();
+}
 async function fetchReal() {
-  const o = origin(), ts = targets();
+  const seq = ++fetchSeq, o = origin(), ts = targets();
   if (!o || !ts.length) { rt = null; return; }
   try {
-    // 1) 이동시간 행렬 → 순서 최적화에 사용
-    const mk = okey() + '|' + ts.map(s => s.id).sort().join(',');
-    if (!mtx || mtx.key !== mk) {
+    // 1) 지금 순서대로 도로 경로 먼저 그림
+    await fetchRoute(seq);
+    // 2) 실제 자전거 시간 행렬로 순서 다시 최적화 (50지점까지)
+    const mk = okey() + '|' + ts.map(s => s.id).sort().join(',') + '|' + S.speed;
+    if (ts.length < 50 && (!mtx || mtx.key !== mk)) {
       const pts = [{ id: '@o', ...o }, ...ts];
-      const r = await fetch(`${OSRM}/table/v1/driving/${pts.map(rnd).join(';')}?annotations=duration`).then(r => r.json());
-      if (r.code !== 'Ok') throw r.code;
-      mtx = { key: mk, idx: Object.fromEntries(pts.map((p, i) => [p.id, i])), D: r.durations };
+      const r = await val('sources_to_targets', { sources: pts.map(loc), targets: pts.map(loc), ...bike() });
+      if (seq !== fetchSeq) return;
+      mtx = { key: mk, idx: Object.fromEntries(pts.map((p, i) => [p.id, i])), D: r.sources_to_targets.map(row => row.map(c => c.time)) };
       recalc(true);
-    }
-    // 2) 정해진 순서대로 실제 도로 경로
-    const rk = okey() + '|' + route.join(',');
-    if (route.length && (!rt || rt.key !== rk)) {
-      const pts = [o, ...route.map(id => S.stores[id])];
-      const r = await fetch(`${OSRM}/route/v1/driving/${pts.map(rnd).join(';')}?overview=full&geometries=geojson`).then(r => r.json());
-      if (r.code !== 'Ok') throw r.code;
-      rt = { key: rk, legs: r.routes[0].legs, coords: r.routes[0].geometry.coordinates };
-      renderRoute(); renderMarkers();
+      await fetchRoute(seq);
     }
   } catch (e) { console.warn('자전거 경로 실패, 직선 추정 사용', e); }
 }
-const realLegs = () => rt && rt.key === okey() + '|' + route.join(',') ? rt.legs : null;
-const legMin = sec => Math.max(1, Math.round(sec * OSRM_KMH / S.speed / 60));
+// 매장 순서가 같으면 (내 위치가 조금 바뀌어도) 받아둔 경로를 계속 보여줌
+const realLegs = () => rt && rt.key === route.join(',') ? rt.legs : null;
+const legMin = sec => Math.max(1, Math.round(sec / 60));
 
-function origin() { return me || (map ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : S.center); }
+function origin() {
+  if (me) return me;
+  if (S.lastMe) return S.lastMe;
+  const c = map ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : S.center;
+  return c && { lat: +c.lat.toFixed(2), lng: +c.lng.toFixed(2) };
+}
 function targets() {
   return Object.values(S.stores).filter(s => has(S.day.stock[s.id]) && !S.day.done[s.id] && !S.day.skip[s.id]);
 }
@@ -292,13 +331,13 @@ function renderMarkers() {
     const q = S.day.stock[st.id], done = S.day.done[st.id];
     if (S.onlyHas && !S.checkMode && !has(q) && !done) continue;
     const idx = route.indexOf(st.id);
-    let cls = 'pin', txt = 'GS';
-    if (done === 'buy') { cls += ' done'; txt = '✔ 구매'; }
-    else if (done === 'miss') { cls += ' miss'; txt = '✕ 허탕'; }
-    else if (has(q)) { cls += ' has'; txt = (idx >= 0 ? (idx+1) + '. ' : S.day.skip[st.id] ? '제외 ' : '') + lbl(q); }
-    else if (q === 0) { cls += ' zero'; txt = '없음'; }
+    let cls = 'pin', txt = '';
+    if (done === 'buy') { cls += ' done'; txt = '✔'; }
+    else if (done === 'miss') { cls += ' miss'; txt = '✕'; }
+    else if (has(q)) { cls += ' has' + (S.day.skip[st.id] ? ' skip' : ''); txt = idx >= 0 ? idx + 1 : ''; }
+    else if (q === 0) { cls += ' zero'; }
     const el = document.createElement('div'); el.className = cls; el.textContent = txt; el.title = st.name;
-    const o = new naver.maps.Marker({ map, position: new naver.maps.LatLng(st.lat, st.lng), icon: { content: el, anchor: new naver.maps.Point(0, 0) }, zIndex: has(q) ? 3 : 1, title: st.name });
+    const o = new naver.maps.Marker({ map, position: new naver.maps.LatLng(st.lat, st.lng), icon: { content: el, anchor: new naver.maps.Point(0, 0) }, zIndex: has(q) ? 5 + (idx >= 0 ? 100 - idx : 0) : 1, title: st.name });
     naver.maps.Event.addListener(o, 'click', () => tapMarker(st.id));
     overlays[st.id] = o;
   }
@@ -362,29 +401,45 @@ $('#sheet').addEventListener('click', e => {
   else if (t.set !== undefined) setStock(sheetId, t.set === '' ? undefined : +t.set);
 });
 
-function findStores() {
+// 카카오 검색은 한 번에 최대 45개 → 결과가 더 많으면 구역을 4등분해서 다시 검색
+function searchRect(ps, r, depth) {
+  return new Promise(res => {
+    const out = [];
+    const b = new kakao.maps.LatLngBounds(new kakao.maps.LatLng(r.s, r.w), new kakao.maps.LatLng(r.n, r.e));
+    ps.keywordSearch('GS25', (data, status, pg) => {
+      if (status !== kakao.maps.services.Status.OK) return res(out);
+      if (pg.current === 1 && pg.totalCount > 45 && depth < 5) {
+        const ml = (r.s + r.n) / 2, mg = (r.w + r.e) / 2;
+        return Promise.all([{ s: r.s, n: ml, w: r.w, e: mg }, { s: r.s, n: ml, w: mg, e: r.e }, { s: ml, n: r.n, w: r.w, e: mg }, { s: ml, n: r.n, w: mg, e: r.e }]
+          .map(q => searchRect(ps, q, depth + 1))).then(a => res(a.flat()));
+      }
+      out.push(...data);
+      if (pg.hasNextPage) pg.nextPage(); else res(out);
+    }, { bounds: b });
+  });
+}
+async function findStores() {
   if (!map) return;
   if (!window.kakao?.maps?.services) return flash('매장 검색(카카오)을 불러오지 못했어요');
   const ps = new kakao.maps.services.Places();
-  const nc = map.getCenter(), center = new kakao.maps.LatLng(nc.lat(), nc.lng());
-  const radius = Math.min(20000, Math.round((+$('#radius').value || 2) * 1000));
+  const c = map.getCenter(), lat = c.lat(), lng = c.lng();
+  const radius = Math.min(10000, Math.round((+$('#radius').value || 2) * 1000));
   S.radius = radius / 1000;
-  let found = 0;
+  const dLa = radius / 111000, dLo = radius / (111000 * Math.cos(lat * Math.PI / 180));
   $('#findBtn').disabled = true; $('#findBtn').textContent = '찾는 중…';
-  const cb = (data, status, pg) => {
-    if (status === kakao.maps.services.Status.OK) {
-      for (const p of data) {
-        if (!/^GS25/i.test(p.place_name)) continue;
-        if (!S.stores[p.id]) found++;
-        S.stores[p.id] = { id: p.id, name: p.place_name.replace(/^GS25\s*/i, ''), addr: p.road_address_name || p.address_name, lat: +p.y, lng: +p.x };
-      }
-      if (pg.hasNextPage) return pg.nextPage();
+  let found = 0;
+  try {
+    const data = await searchRect(ps, { s: lat - dLa, n: lat + dLa, w: lng - dLo, e: lng + dLo }, 0);
+    for (const p of data) {
+      if (!/^GS25/i.test(p.place_name)) continue;
+      if (!S.stores[p.id]) found++;
+      S.stores[p.id] = { id: p.id, name: p.place_name.replace(/^GS25\s*/i, ''), addr: p.road_address_name || p.address_name, lat: +p.y, lng: +p.x };
     }
+  } finally {
     save(); renderAll();
     $('#findBtn').disabled = false; $('#findBtn').textContent = '지도 중심 주변 GS25 찾기';
-    flash(`GS25 ${Object.keys(S.stores).length}곳 (새로 찾음 ${found})`);
-  };
-  ps.keywordSearch('GS25', cb, { location: center, radius, sort: kakao.maps.services.SortBy.DISTANCE });
+  }
+  flash(`GS25 ${Object.keys(S.stores).length}곳 (새로 찾음 ${found})`);
 }
 
 // ---------- GPS ----------
@@ -393,6 +448,7 @@ function startGps() {
   let first = true;
   navigator.geolocation.watchPosition(p => {
     me = { lat: p.coords.latitude, lng: p.coords.longitude };
+    if (!S.lastMe || hav(S.lastMe, me) > 50) { S.lastMe = me; save(); }
     $('#gps').textContent = `📍 GPS ±${Math.round(p.coords.accuracy)}m`;
     if (map) {
       const pos = new naver.maps.LatLng(me.lat, me.lng);
@@ -512,7 +568,7 @@ function renderRoute() {
   let cum = 0, cumT = 0, prev = origin();
   $('#stops').innerHTML = stops.map((s, i) => {
     const seg = legs ? legs[i].distance : prev ? road(prev, s) : 0; cum += seg; prev = s;
-    cumT += legs ? legs[i].duration * OSRM_KMH / S.speed / 60 : seg / 1000 / S.speed * 60;
+    cumT += legs ? legs[i].duration / 60 : seg / 1000 / S.speed * 60;
     return `<div class="stop ${S.day.pinned.includes(s.id) ? 'pinned' : ''}"><div class="num">${i+1}</div>
       <div class="mv"><button class="btn" data-up="${s.id}" ${i ? '' : 'disabled'}>▲</button><button class="btn" data-down="${s.id}" ${i < stops.length - 1 ? '' : 'disabled'}>▼</button></div>
       <div style="flex:1;min-width:0"><b>${esc(s.name)}</b> <span style="color:var(--gs);font-weight:700">${lbl(S.day.stock[s.id])}</span>
@@ -560,7 +616,7 @@ $('#kakaoAll').onclick = () => {
 };
 $('#autoOrder').onclick = () => { S.day.pinned = []; save(); recalc(); };
 $('#speed').value = S.speed;
-$('#speed').onchange = e => { S.speed = +e.target.value || 20; save(); renderRoute(); };
+$('#speed').onchange = e => { S.speed = +e.target.value || 20; save(); rt = null; recalc(); };
 $('#radius').value = S.radius;
 
 // ---------- 화면: 기록 ----------
