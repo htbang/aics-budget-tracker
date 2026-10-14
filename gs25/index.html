@@ -62,6 +62,8 @@ td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
 .drag{font-size:22px;color:var(--sub);padding:6px 8px;cursor:grab;touch-action:none;user-select:none}
 .stop.ghost{opacity:.4}.stop.chosen{background:color-mix(in srgb,var(--gs) 12%,transparent)}
 .pinned .num{background:var(--warn)}
+.closed #panel{display:none}.closed #mapWrap{flex:1;height:auto}
+#mapBar .chip.pnl{margin-left:auto;background:var(--ink);color:var(--card);border-color:var(--ink)}
 #mapBar{position:absolute;top:8px;left:8px;right:8px;z-index:100;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
 #mapBar .chip{pointer-events:auto;box-shadow:0 1px 5px rgba(0,0,0,.25)}
 #mapBar .chip.mode{background:var(--gs);border-color:var(--gs);color:#fff}
@@ -78,6 +80,7 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
 <div id="app">
   <header>
     <h1>GS25 포카 루트</h1>
+    <small id="sync" style="margin-right:6px">☁ 연결 중…</small>
     <small id="gps">📍 위치 확인 중…</small>
   </header>
   <div id="main">
@@ -136,6 +139,8 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=tijknjlz53"></script>
 <!-- 카카오는 GS25 매장 검색에만 사용 -->
 <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=5a47e29f45a5a1650dff8c887084e342&libraries=services&autoload=false"></script>
@@ -161,7 +166,7 @@ function newDay() { return { date: today(), stock: {}, done: {}, skip: {}, pinne
 // 재고값: 숫자(개수), -1 = 있음(개수 모름), 0 = 없음, undefined = 미확인
 const has = v => v > 0 || v === -1;
 const lbl = v => has(v) ? '있음' : v === 0 ? '없음' : '?';
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
+function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} if (!applying) syncPush(); }
 function addLog(type, st, qty) {
   S.log.push({ t: Date.now(), type, id: st.id, name: st.name, qty: qty ?? null });
   save();
@@ -373,12 +378,20 @@ function renderMapBar() {
   $('#mapBar').innerHTML = S.checkMode
     ? `<button class="chip mode" data-mb="mode">✔ 체크 중 · 있음 ${n}곳 (끄기)</button><button class="chip" data-mb="rest">나머지 없음</button><button class="chip" data-mb="done">체크 끝 → 경로</button>`
     : `<button class="chip" data-mb="mode">재고 체크 모드</button><button class="chip ${S.onlyHas ? 'on' : ''}" data-mb="only">재고만 보기</button><button class="chip" data-mb="find">여기서 GS 찾기</button>`;
+  $('#mapBar').innerHTML += `<button class="chip pnl" data-mb="panel">${S.panelClosed ? (innerWidth >= 900 ? '◀ 목록 열기' : '▲ 목록 열기') : (innerWidth >= 900 ? '목록 닫기 ▶' : '목록 닫기 ▼')}</button>`;
+}
+function setPanel(closed) {
+  S.panelClosed = closed; save();
+  $('#main').classList.toggle('closed', closed);
+  renderMapBar();
+  if (map) setTimeout(() => map.autoResize(), 50);
 }
 $('#mapBar').addEventListener('click', e => {
   const a = e.target.dataset.mb; if (!a) return;
   if (a === 'mode') { S.checkMode = !S.checkMode; sheetId = null; save(); renderMarkers(); if (S.checkMode) flash('재고 있는 GS를 탭하세요'); }
   else if (a === 'rest') $('#restZero').click();
-  else if (a === 'done') { S.checkMode = false; save(); renderMarkers(); switchTab('route'); }
+  else if (a === 'done') { S.checkMode = false; save(); renderMarkers(); setPanel(false); switchTab('route'); }
+  else if (a === 'panel') setPanel(!S.panelClosed);
   else if (a === 'only') $('#onlyHas').click();
   else if (a === 'find') findStores();
 });
@@ -683,6 +696,74 @@ $('#importBtn').onclick = () => {
   } catch { alert('형식이 올바르지 않아요'); }
 };
 
+// ---------- 기기 간 동기화 (PC ↔ 폰, Firebase) ----------
+// 오늘 체크(day), 매장 목록(stores), 기록(log)을 공유. 마지막에 바꾼 기기 기준.
+const SYNC_PATH = 'gs25route/ee09207ee3c3a02ed9940add' + (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? '/dev' : '');  // 로컬 테스트는 별도 공간
+let fb = null, applying = false, dirty = false, pushT = null, firstDay = true;
+const uploaded = new Set(), storesUp = new Set();
+const logKey = l => `${l.t}_${l.type}_${l.id}`;
+const normDay = d => { d.stock ||= {}; d.done ||= {}; d.skip ||= {}; d.pinned ||= []; return d; };
+const syncMsg = t => { const el = $('#sync'); if (el) el.textContent = t; };
+function initSync() {
+  if (!window.firebase?.database) return syncMsg('☁ 오프라인');
+  try {
+    firebase.initializeApp({
+      apiKey: 'AIzaSyAm_bADKYdS-8b_dsbcQ6bGxQQFkGXClTg',
+      authDomain: 'aics-worksho-c390c.firebaseapp.com',
+      databaseURL: 'https://aics-worksho-c390c-default-rtdb.firebaseio.com',
+      projectId: 'aics-worksho-c390c',
+    }, 'gs25');
+    fb = firebase.app('gs25').database().ref(SYNC_PATH);
+  } catch (e) { console.warn(e); return syncMsg('☁ 오프라인'); }
+  firebase.app('gs25').database().ref('.info/connected').on('value', s => syncMsg(s.val() ? '☁ 동기화' : '☁ 오프라인'));
+
+  fb.child('day').on('value', snap => {
+    const r = snap.val();
+    if (firstDay) {
+      // 처음 연결: 오늘 데이터끼리 합쳐서 올림 (어느 기기에서 먼저 체크했든 안 사라지게)
+      firstDay = false;
+      if (r && r.date === today()) {
+        normDay(r);
+        S.day = { ...r, stock: { ...S.day.stock, ...r.stock }, done: { ...S.day.done, ...r.done }, skip: { ...S.day.skip, ...r.skip }, pinned: r.pinned.length ? r.pinned : S.day.pinned };
+      }
+      applying = true; save(); applying = false; renderAll(); syncPush(); return;
+    }
+    if (dirty || !r || r.date !== today()) return;   // 내가 방금 바꾼 게 아직 안 올라갔으면 무시
+    applying = true; S.day = normDay(r); save(); applying = false;
+    renderAll();
+  });
+  fb.child('stores').on('value', snap => {
+    const r = snap.val() || {};
+    let changed = false;
+    for (const k in r) { storesUp.add(k); if (!S.stores[k]) { S.stores[k] = r[k]; changed = true; } }
+    if (Object.keys(S.stores).some(k => !r[k])) syncPush();
+    if (changed) { applying = true; save(); applying = false; renderAll(); }
+  });
+  fb.child('log').on('value', snap => {
+    const r = snap.val() || {};
+    const have = new Set(S.log.map(logKey));
+    let changed = false;
+    for (const k in r) { uploaded.add(k); if (!have.has(k)) { S.log.push(r[k]); changed = true; } }
+    if (changed) { S.log.sort((a, b) => a.t - b.t); applying = true; save(); applying = false; renderLog(); }
+    syncPush();
+  });
+}
+function syncPush() {
+  if (!fb || firstDay) return;
+  dirty = true;
+  clearTimeout(pushT);
+  pushT = setTimeout(async () => {
+    try {
+      const up = {};
+      up.day = JSON.parse(JSON.stringify(S.day));
+      for (const l of S.log) { const k = logKey(l); if (!uploaded.has(k)) { up['log/' + k] = l; uploaded.add(k); } }
+      for (const id in S.stores) if (!storesUp.has(id)) { up['stores/' + id] = S.stores[id]; storesUp.add(id); }
+      await fb.update(up);
+    } catch (e) { console.warn('동기화 실패', e); syncMsg('☁ 오프라인'); }
+    dirty = false;
+  }, 300);
+}
+
 // ---------- 공통 ----------
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function flash(msg) { const t = $('#toast'); t.textContent = msg; t.style.display = 'block'; clearTimeout(flash.h); flash.h = setTimeout(() => t.style.display = 'none', 2200); }
@@ -701,6 +782,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 navigator.wakeLock?.request('screen').catch(() => {});
 
 window.kakao?.maps?.load(() => { if (map && !Object.keys(S.stores).length) findStores(); });
+$('#main').classList.toggle('closed', !!S.panelClosed);
+initSync();
 if (window.naver?.maps) initMap();
 else { $('#map').innerHTML = '<p style="padding:20px">네이버 지도를 불러오지 못했어요.</p>'; renderAll(); }
 </script>
