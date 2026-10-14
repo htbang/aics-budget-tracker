@@ -190,12 +190,13 @@ function solve(start, pts) {
   return ord;
 }
 
+function origin() { return me || (map ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : S.center); }
 function targets() {
   return Object.values(S.stores).filter(s => S.day.stock[s.id] > 0 && !S.day.done[s.id]);
 }
 function recalc() {
   const ts = targets();
-  const start = me || (map ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : ts[0]);
+  const start = origin() || ts[0];
   route = start ? solve(start, ts).map(i => ts[i].id) : [];
   lastCalcPos = me;
   renderRoute(); renderMarkers();
@@ -207,6 +208,7 @@ function initMap() {
   map = new naver.maps.Map('map', { center: new naver.maps.LatLng(c.lat, c.lng), zoom: 15, scaleControl: false, mapDataControl: false });
   naver.maps.Event.addListener(map, 'idle', () => {
     const p = map.getCenter(); S.center = { lat: p.lat(), lng: p.lng() }; save();
+    if (!me && !document.activeElement?.matches('input')) { renderList(); recalc(); }
   });
   renderAll();
   startGps();
@@ -286,7 +288,7 @@ function startGps() {
 // ---------- 화면: 재고 체크 ----------
 function renderList() {
   const q = $('#q').value.trim();
-  const ref = me || S.center;
+  const ref = origin();
   const list = Object.values(S.stores)
     .filter(s => !q || s.name.includes(q) || (s.addr || '').includes(q))
     .map(s => ({ ...s, dist: ref ? hav(ref, s) : 0 }))
@@ -318,7 +320,9 @@ function setStock(id, raw) {
     S.day.stock[id] = n;
     addLog('stock', st, n);
   }
-  save(); renderList(); recalc();
+  save(); recalc();
+  const row = document.getElementById('r-' + id), v = S.day.stock[id];
+  if (row) { row.classList.toggle('has', v > 0); row.classList.toggle('zero', v === 0); row.querySelector('.qty').value = v ?? ''; }
 }
 $('#q').addEventListener('input', renderList);
 $('#findBtn').onclick = findStores;
@@ -344,19 +348,19 @@ function renderRoute() {
     $('#stops').innerHTML = ''; return;
   }
   const n = stops[0];
-  const d0 = me ? road(me, n) : null;
+  const o = origin(), d0 = o ? road(o, n) : null;
   const arrived = me && hav(me, n) < ARRIVE_M;
   $('#nextCard').innerHTML = `<div class="next ${arrived ? 'arrived' : ''}">
     <div class="muted">${arrived ? '🎯 도착했어요!' : '다음 목적지'}</div>
     <h2>${esc(n.name)} <span style="color:var(--gs)">${S.day.stock[n.id]}개</span></h2>
-    <div class="meta">${d0 != null ? `${fmtD(d0)} · 약 ${mins(d0)}분` : 'GPS 위치 없음'} · ${esc(n.addr || '')}</div>
+    <div class="meta">${d0 != null ? `${me ? '' : '(지도 중심 기준) '}${fmtD(d0)} · 약 ${mins(d0)}분` : ''} · ${esc(n.addr || '')}</div>
     <div class="acts">
       ${isMobile ? `<a class="btn p" href="${naverLink(n)}">네이버맵 길안내</a>` : ''}
       <a class="btn ${isMobile ? '' : 'p'}" href="${kakaoLink([n])}" target="_blank">카카오맵</a>
       <button class="btn ok" data-buy="${n.id}">샀음</button>
       <button class="btn no" data-miss="${n.id}">허탕</button>
     </div></div>`;
-  let cum = 0, prev = me;
+  let cum = 0, prev = origin();
   $('#stops').innerHTML = stops.map((s, i) => {
     const seg = prev ? road(prev, s) : 0; cum += seg; prev = s;
     return `<div class="stop"><div class="num">${i+1}</div>
