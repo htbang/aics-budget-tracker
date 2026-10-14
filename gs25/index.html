@@ -51,7 +51,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
 .pin{position:relative;width:12px;height:12px;border-radius:50%;background:#8b95a1;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.45);transform:translate(-50%,-50%);display:grid;place-items:center;color:#fff;font-size:10px;font-weight:800;line-height:1;cursor:pointer}
 .pin::after{content:'';position:absolute;inset:-11px}
-.pin.has{width:19px;height:19px;background:#0a7cff}.pin.zero{width:9px;height:9px;background:#cfd4da}.pin.done{width:17px;height:17px;background:var(--ok)}.pin.miss{width:15px;height:15px;background:var(--no)}.pin.skip{background:#7aa7d9}
+.pin.has{width:19px;height:19px;background:#0a7cff}.pin.zero{width:9px;height:9px;background:#cfd4da}.pin.done{width:17px;height:17px;background:var(--ok)}.pin.miss{width:15px;height:15px;background:var(--no)}.pin.has.skip{background:#0a7cff;border-color:#111;opacity:.75}
 .me{transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.25)}
 .st{min-width:56px;padding:8px 6px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--sub);font-weight:700;font-size:14px;cursor:pointer}
 .st.has{background:var(--gs);border-color:var(--gs);color:#fff}.st.zero{background:var(--card);color:var(--no);border-color:var(--no)}
@@ -340,7 +340,7 @@ function renderMarkers() {
     let cls = 'pin', txt = '';
     if (done === 'buy') { cls += ' done'; txt = '✔'; }
     else if (done === 'miss') { cls += ' miss'; txt = '✕'; }
-    else if (has(q)) { cls += ' has' + (S.day.skip[st.id] ? ' skip' : ''); txt = idx >= 0 ? idx + 1 : ''; }
+    else if (has(q)) { cls += ' has' + (S.day.skip[st.id] ? ' skip' : ''); txt = S.day.skip[st.id] ? '제' : idx >= 0 ? idx + 1 : ''; }
     else if (q === 0) { cls += ' zero'; }
     const el = document.createElement('div'); el.className = cls; el.textContent = txt; el.title = st.name;
     const o = new naver.maps.Marker({ map, position: new naver.maps.LatLng(st.lat, st.lng), icon: { content: el, anchor: new naver.maps.Point(0, 0) }, zIndex: has(q) ? 5 + (idx >= 0 ? 100 - idx : 0) : 1, title: st.name });
@@ -482,16 +482,20 @@ function renderList() {
   renderSum();
   $('#onlyHas').classList.toggle('on', !!S.onlyHas);
   if (!list.length) { $('#storeList').innerHTML = '<p class="muted">지도를 동네로 옮긴 뒤 "주변 GS25 찾기"를 누르세요.</p>'; return; }
-  $('#storeList').innerHTML = list.map(s => {
-    const v = S.day.stock[s.id], d = S.day.done[s.id];
-    return `<div class="row ${rowCls(v)}" id="r-${s.id}">
-      <div class="nm" data-cyc="${s.id}"><b data-cyc="${s.id}">${esc(s.name)}${d === 'buy' ? ' ✔' : d === 'miss' ? ' ✕' : ''}</b><span data-cyc="${s.id}">${fmtD(s.dist)} · ${esc(s.addr || '')}</span></div>
-      <button class="st ${rowCls(v)}" data-cyc="${s.id}">${stTxt(v)}</button>
-    </div>`;
-  }).join('');
+  $('#storeList').innerHTML = list.map(rowHtml).join('');
+}
+function rowHtml(s) {
+  const v = S.day.stock[s.id], d = S.day.done[s.id], sk = S.day.skip[s.id];
+  return `<div class="row ${rowCls(v)}" id="r-${s.id}" data-dist="${s.dist}">
+    <div class="nm" data-cyc="${s.id}"><b data-cyc="${s.id}">${esc(s.name)}${d === 'buy' ? ' ✔' : d === 'miss' ? ' ✕' : ''}</b><span data-cyc="${s.id}">${fmtD(s.dist)} · ${esc(s.addr || '')}</span></div>
+    ${has(v) && !d ? `<button class="chip ${sk ? 'on' : ''}" data-skipt="${s.id}">${sk ? '경로 제외됨' : '경로 포함'}</button>` : ''}
+    <button class="st ${rowCls(v)}" data-cyc="${s.id}">${stTxt(v)}</button>
+  </div>`;
 }
 $('#storeList').addEventListener('click', e => {
-  const id = e.target.dataset.cyc; if (id) cycle(id);
+  const t = e.target.dataset;
+  if (t.cyc) cycle(t.cyc);
+  else if (t.skipt) { if (S.day.skip[t.skipt]) delete S.day.skip[t.skipt]; else S.day.skip[t.skipt] = true; save(); recalc(); updateRow(t.skipt); }
 });
 const rowCls = v => has(v) ? 'has' : v === 0 ? 'zero' : '';
 const stTxt = v => has(v) ? '있음' : v === 0 ? '없음' : '?';
@@ -510,20 +514,19 @@ function setStock(id, v, quiet) {
   const st = S.stores[id];
   if (v === undefined) delete S.day.stock[id];
   else { S.day.stock[id] = v; addLog('stock', st, v === -1 ? null : v); }
-  if (!has(v)) delete S.day.skip[id];
   if (quiet) return;
   save(); recalc(); updateRow(id);
 }
 function renderSum() {
   const all = Object.values(S.stores), cnt = f => all.filter(x => f(S.day.stock[x.id])).length;
-  $('#sum').innerHTML = `재고 <b>${cnt(has)}</b>곳 · 없음 ${cnt(v => v === 0)} · 미확인 ${cnt(v => v === undefined)}`;
+  $('#sum').innerHTML = `재고 <b>${cnt(has)}</b>곳 · 없음 ${cnt(v => v === 0)} · 미확인 ${cnt(v => v === undefined)}`
+    + (Object.keys(S.day.skip).some(id => has(S.day.stock[id])) ? ` · 경로 제외 ${Object.keys(S.day.skip).filter(id => has(S.day.stock[id])).length}` : '');
 }
 function updateRow(id) {
   renderSum();
   const row = document.getElementById('r-' + id), v = S.day.stock[id];
   if (!row) return;
-  row.className = 'row ' + rowCls(v);
-  const b = row.querySelector('.st'); b.className = 'st ' + rowCls(v); b.textContent = stTxt(v);
+  row.outerHTML = rowHtml({ ...S.stores[id], dist: +row.dataset.dist });
 }
 $('#onlyHas').onclick = () => { S.onlyHas = !S.onlyHas; save(); renderList(); renderMarkers(); };
 $('#restZero').onclick = () => {
@@ -615,9 +618,9 @@ document.addEventListener('click', e => {
     const st = S.stores[t.miss];
     S.day.done[st.id] = 'miss'; addLog('miss', st, 0); recalc(); renderList(); renderLog();
   } else if (t.skip) {
-    S.day.skip[t.skip] = true; save(); recalc(); flash('경로에서 제외했어요');
+    S.day.skip[t.skip] = true; save(); recalc(); updateRow(t.skip); flash('경로에서만 제외했어요 (재고 있음은 그대로)');
   } else if (t.unskip) {
-    delete S.day.skip[t.unskip]; save(); recalc();
+    delete S.day.skip[t.unskip]; save(); recalc(); updateRow(t.unskip);
   } else if (t.first || t.up || t.down) {
     const id = t.first || t.up || t.down, i = route.indexOf(id);
     const to = t.first ? 0 : t.up ? i - 1 : i + 1;
