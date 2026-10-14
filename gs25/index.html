@@ -106,7 +106,7 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
           <label class="s">전기자전거 <input type="number" id="speed" value="20" min="8" max="30">km/h</label>
         </div>
         <div id="stops"></div>
-        <div class="muted" style="margin-top:8px">▲▼나 "다음으로"를 누르면 그 위치까지는 순서가 고정(주황 번호)되고, 나머지는 그 뒤에 이어서 다시 최적화해요. GPS 위치가 바뀌거나 체크할 때마다 순서를 다시 계산해요. 거리는 직선거리에 도로 보정(×1.35)을 곱한 추정치예요.</div>
+        <div class="muted" style="margin-top:8px">▲▼나 "다음으로"를 누르면 그 위치까지는 순서가 고정(주황 번호)되고, 나머지는 그 뒤에 이어서 다시 최적화해요. GPS 위치가 바뀌거나 체크할 때마다 순서를 다시 계산해요. 거리와 시간은 실제 자전거 도로 기준(OpenStreetMap)이고, 불러오지 못하면 직선 추정(점선)으로 보여줘요.</div>
       </div>
 
       <div class="view" id="v-log">
@@ -174,10 +174,10 @@ const mins = m => Math.max(1, Math.round(m / 1000 / S.speed * 60));
 const fmtD = m => m < 1000 ? Math.round(m) + 'm' : (m/1000).toFixed(1) + 'km';
 
 // 시작점에서 출발해 모든 점을 도는 최단 열린 경로 (Held-Karp, 많으면 근사)
-function solve(start, pts) {
+function solve(start, pts, cost = road) {
   const n = pts.length;
   if (n <= 1) return pts.map((_, i) => i);
-  const d = (i, j) => road(pts[i], pts[j]), d0 = i => road(start, pts[i]);
+  const d = (i, j) => cost(pts[i], pts[j]), d0 = i => cost(start, pts[i]);
   if (n <= 12) {
     const N = 1 << n, dp = new Float64Array(N * n).fill(Infinity), par = new Int8Array(N * n).fill(-1);
     for (let i = 0; i < n; i++) dp[(1 << i) * n + i] = d0(i);
@@ -196,31 +196,71 @@ function solve(start, pts) {
   }
   // 최근접 + 2-opt
   let left = pts.map((_, i) => i), cur = start, ord = [];
-  while (left.length) { left.sort((a, b) => road(cur, pts[a]) - road(cur, pts[b])); const k = left.shift(); ord.push(k); cur = pts[k]; }
+  while (left.length) { left.sort((a, b) => cost(cur, pts[a]) - cost(cur, pts[b])); const k = left.shift(); ord.push(k); cur = pts[k]; }
   const P = i => i < 0 ? start : pts[ord[i]];
   let imp = true;
   while (imp) { imp = false;
     for (let i = 0; i < n - 1; i++) for (let k = i + 1; k < n; k++) {
       const a = P(i-1), b = P(i), c = P(k), e = k + 1 < n ? P(k+1) : null;
-      const before = road(a, b) + (e ? road(c, e) : 0), after = road(a, c) + (e ? road(b, e) : 0);
+      const before = cost(a, b) + (e ? cost(c, e) : 0), after = cost(a, c) + (e ? cost(b, e) : 0);
       if (after < before - 1) { ord = [...ord.slice(0, i), ...ord.slice(i, k+1).reverse(), ...ord.slice(k+1)]; imp = true; }
     }
   }
   return ord;
 }
 
+// ---------- 실제 자전거 경로 (OpenStreetMap 기반 OSRM) ----------
+const OSRM = 'https://routing.openstreetmap.de/routed-bike';
+const OSRM_KMH = 15;              // OSRM 자전거 프로필 기준 속도 → 전기자전거 속도로 환산
+let mtx = null, rt = null, fetchT = null;
+const rnd = p => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`;
+const okey = () => { const o = origin(); return o ? o.lat.toFixed(3) + ',' + o.lng.toFixed(3) : '-'; };
+// 두 지점 사이 비용(초): 실제 자전거 이동시간이 있으면 그것, 없으면 직선 추정
+function cost(a, b) {
+  if (mtx) { const i = mtx.idx[a.id ?? '@o'], j = mtx.idx[b.id ?? '@o']; if (i != null && j != null && mtx.D[i][j] != null) return mtx.D[i][j]; }
+  return road(a, b) / (OSRM_KMH / 3.6);
+}
+function scheduleFetch() { clearTimeout(fetchT); fetchT = setTimeout(fetchReal, 700); }
+async function fetchReal() {
+  const o = origin(), ts = targets();
+  if (!o || !ts.length) { rt = null; return; }
+  try {
+    // 1) 이동시간 행렬 → 순서 최적화에 사용
+    const mk = okey() + '|' + ts.map(s => s.id).sort().join(',');
+    if (!mtx || mtx.key !== mk) {
+      const pts = [{ id: '@o', ...o }, ...ts];
+      const r = await fetch(`${OSRM}/table/v1/driving/${pts.map(rnd).join(';')}?annotations=duration`).then(r => r.json());
+      if (r.code !== 'Ok') throw r.code;
+      mtx = { key: mk, idx: Object.fromEntries(pts.map((p, i) => [p.id, i])), D: r.durations };
+      recalc(true);
+    }
+    // 2) 정해진 순서대로 실제 도로 경로
+    const rk = okey() + '|' + route.join(',');
+    if (route.length && (!rt || rt.key !== rk)) {
+      const pts = [o, ...route.map(id => S.stores[id])];
+      const r = await fetch(`${OSRM}/route/v1/driving/${pts.map(rnd).join(';')}?overview=full&geometries=geojson`).then(r => r.json());
+      if (r.code !== 'Ok') throw r.code;
+      rt = { key: rk, legs: r.routes[0].legs, coords: r.routes[0].geometry.coordinates };
+      renderRoute(); renderMarkers();
+    }
+  } catch (e) { console.warn('자전거 경로 실패, 직선 추정 사용', e); }
+}
+const realLegs = () => rt && rt.key === okey() + '|' + route.join(',') ? rt.legs : null;
+const legMin = sec => Math.max(1, Math.round(sec * OSRM_KMH / S.speed / 60));
+
 function origin() { return me || (map ? { lat: map.getCenter().lat(), lng: map.getCenter().lng() } : S.center); }
 function targets() {
   return Object.values(S.stores).filter(s => has(S.day.stock[s.id]) && !S.day.done[s.id] && !S.day.skip[s.id]);
 }
-function recalc() {
+function recalc(fromFetch) {
   const ts = targets(), ids = new Set(ts.map(s => s.id));
   S.day.pinned = S.day.pinned.filter(id => ids.has(id));
   const fixed = S.day.pinned, rest = ts.filter(s => !fixed.includes(s.id));
   const start = fixed.length ? S.stores[fixed[fixed.length - 1]] : (origin() || rest[0]);
-  route = [...fixed, ...(start ? solve(start, rest).map(i => rest[i].id) : [])];
+  route = [...fixed, ...(start ? solve(start, rest, cost).map(i => rest[i].id) : [])];
   lastCalcPos = me;
   renderRoute(); renderMarkers();
+  if (!fromFetch) scheduleFetch();
 }
 
 // ---------- 지도 ----------
@@ -255,9 +295,11 @@ function renderMarkers() {
   }
   if (routeLine) routeLine.setMap(null);
   routeLine = null;
-  const path = [...(me ? [me] : []), ...route.map(id => S.stores[id])].map(p => new naver.maps.LatLng(p.lat, p.lng));
+  const real = realLegs() && rt.coords;
+  const path = real ? real.map(([x, y]) => new naver.maps.LatLng(y, x))
+    : [...(me ? [me] : []), ...route.map(id => S.stores[id])].map(p => new naver.maps.LatLng(p.lat, p.lng));
   if (path.length > 1) {
-    routeLine = new naver.maps.Polyline({ map, path, strokeWeight: 4, strokeColor: '#00b3d6', strokeOpacity: .85, strokeStyle: 'shortdash' });
+    routeLine = new naver.maps.Polyline({ map, path, strokeWeight: real ? 5 : 4, strokeColor: '#00b3d6', strokeOpacity: .9, strokeStyle: real ? 'solid' : 'shortdash' });
   }
 }
 
@@ -394,12 +436,13 @@ function renderRoute() {
   const stops = route.map(id => S.stores[id]).filter(Boolean);
   $('#autoOrder').style.display = S.day.pinned.length ? '' : 'none';
   const n = stops[0];
-  const o = origin(), d0 = o && n ? road(o, n) : null;
+  const o = origin(), legs = realLegs(), d0 = legs ? legs[0].distance : o && n ? road(o, n) : null;
+  const t0 = legs ? legMin(legs[0].duration) : d0 != null ? mins(d0) : null;
   const arrived = me && n && hav(me, n) < ARRIVE_M;
   $('#nextCard').innerHTML = !n ? `<div class="next"><h2>갈 곳이 없어요</h2><div class="meta">① 재고 체크 탭에서 재고 있는 매장을 탭해 '있음'으로 표시하세요.</div></div>` : `<div class="next ${arrived ? 'arrived' : ''}">
     <div class="muted">${arrived ? '🎯 도착했어요!' : '다음 목적지'}</div>
     <h2>${esc(n.name)} <span style="color:var(--gs)">${lbl(S.day.stock[n.id])}</span></h2>
-    <div class="meta">${d0 != null ? `${me ? '' : '(지도 중심 기준) '}${fmtD(d0)} · 약 ${mins(d0)}분` : ''} · ${esc(n.addr || '')}</div>
+    <div class="meta">${d0 != null ? `${me ? '' : '(지도 중심 기준) '}${legs ? '🚲 ' : '직선추정 '}${fmtD(d0)} · 약 ${t0}분` : ''} · ${esc(n.addr || '')}</div>
     <div class="acts">
       ${isMobile ? `<a class="btn p" href="${naverLink(n)}">네이버맵 길안내</a>` : ''}
       <a class="btn ${isMobile ? '' : 'p'}" href="${kakaoLink([n])}" target="_blank">카카오맵</a>
@@ -407,13 +450,14 @@ function renderRoute() {
       <button class="btn no" data-miss="${n.id}">허탕</button>
       <button class="btn" data-skip="${n.id}">제외</button>
     </div></div>`;
-  let cum = 0, prev = origin();
+  let cum = 0, cumT = 0, prev = origin();
   $('#stops').innerHTML = stops.map((s, i) => {
-    const seg = prev ? road(prev, s) : 0; cum += seg; prev = s;
+    const seg = legs ? legs[i].distance : prev ? road(prev, s) : 0; cum += seg; prev = s;
+    cumT += legs ? legs[i].duration * OSRM_KMH / S.speed / 60 : seg / 1000 / S.speed * 60;
     return `<div class="stop ${S.day.pinned.includes(s.id) ? 'pinned' : ''}"><div class="num">${i+1}</div>
       <div class="mv"><button class="btn" data-up="${s.id}" ${i ? '' : 'disabled'}>▲</button><button class="btn" data-down="${s.id}" ${i < stops.length - 1 ? '' : 'disabled'}>▼</button></div>
       <div style="flex:1;min-width:0"><b>${esc(s.name)}</b> <span style="color:var(--gs);font-weight:700">${lbl(S.day.stock[s.id])}</span>
-      <div class="muted">+${fmtD(seg)} · 누적 ${fmtD(cum)} / ${mins(cum)}분</div>
+      <div class="muted">+${fmtD(seg)} · 누적 ${fmtD(cum)} / ${Math.max(1, Math.round(cumT))}분</div>
       <div style="display:flex;gap:4px;margin-top:4px;flex-wrap:wrap">${i ? `<button class="btn sm" data-first="${s.id}">다음으로</button>` : ''}<button class="btn sm" data-skip="${s.id}">제외</button><button class="btn sm ok" data-buy="${s.id}">샀음</button><button class="btn sm no" data-miss="${s.id}">허탕</button></div></div></div>`;
   }).join('') + (() => {
     const sk = Object.keys(S.day.skip).filter(id => has(S.day.stock[id]) && !S.day.done[id]);
