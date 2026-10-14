@@ -16,9 +16,9 @@ header{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(-
 header h1{font-size:16px;margin:0;flex:1}
 header small{opacity:.9;font-size:12px}
 #main{flex:1;display:flex;flex-direction:column;min-height:0}
-#map{height:38vh;min-height:220px;flex:none}
+#mapWrap{position:relative;height:44vh;min-height:240px;flex:none}#map{width:100%;height:100%}
 #panel{flex:1;display:flex;flex-direction:column;min-height:0;background:var(--card)}
-@media (min-width:900px){#main{flex-direction:row}#map{height:auto;flex:1}#panel{flex:none;width:430px;border-left:1px solid var(--line)}}
+@media (min-width:900px){#main{flex-direction:row}#mapWrap{height:auto;flex:1}#panel{flex:none;width:430px;border-left:1px solid var(--line)}}
 .tabs{display:flex;border-bottom:1px solid var(--line)}
 .tabs button{flex:1;padding:12px 0;border:0;background:none;color:var(--sub);font-size:15px;font-weight:600;border-bottom:3px solid transparent}
 .tabs button.on{color:var(--gs);border-color:var(--gs)}
@@ -49,7 +49,7 @@ header small{opacity:.9;font-size:12px}
 h3{font-size:15px;margin:16px 0 6px}
 table{width:100%;border-collapse:collapse;font-size:13px}
 td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
-.pin{background:#9ca3af;color:#fff;border-radius:14px;padding:3px 8px;font-size:12px;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer;transform:translate(-50%,-100%);display:inline-block}
+.pin{background:#9ca3af;color:#fff;border-radius:14px;padding:5px 10px;font-size:13px;font-weight:700;white-space:nowrap;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:pointer;transform:translate(-50%,-100%);display:inline-block}
 .pin.has{background:var(--gs)}.pin.zero{background:#d1d5db;color:#6b7280}.pin.done{background:var(--ok)}.pin.miss{background:var(--no)}
 .me{transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 6px rgba(37,99,235,.25)}
 .st{min-width:56px;padding:8px 6px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--sub);font-weight:700;font-size:14px;cursor:pointer}
@@ -60,6 +60,14 @@ td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
 .sum{font-size:13px;color:var(--sub);margin:2px 0 6px}.sum b{color:var(--ink)}
 .mv{display:flex;flex-direction:column;gap:2px}.mv button{padding:2px 7px;font-size:11px}
 .pinned .num{background:var(--warn)}
+#mapBar{position:absolute;top:8px;left:8px;right:8px;z-index:100;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+#mapBar .chip{pointer-events:auto;box-shadow:0 1px 5px rgba(0,0,0,.25)}
+#mapBar .chip.mode{background:var(--gs);border-color:var(--gs);color:#fff}
+#sheet{position:absolute;left:8px;right:8px;bottom:8px;z-index:100;background:var(--card);border-radius:12px;padding:10px;box-shadow:0 2px 12px rgba(0,0,0,.3);display:none}
+#sheet .acts{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px}
+.checking .pin{opacity:.55;transform:translate(-50%,-100%) scale(.9)}
+.checking .pin.has{opacity:1;transform:translate(-50%,-100%) scale(1.2);border-width:3px;box-shadow:0 0 0 3px rgba(0,179,214,.35),0 2px 6px rgba(0,0,0,.35)}
+.checking .pin.done,.checking .pin.miss{opacity:.8}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;z-index:99;display:none}
 label.s{font-size:13px;color:var(--sub);display:flex;align-items:center;gap:4px}
 label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
@@ -72,7 +80,7 @@ label.s input[type=number]{width:60px;padding:5px;border:1px solid var(--line);b
     <small id="gps">📍 위치 확인 중…</small>
   </header>
   <div id="main">
-    <div id="map"></div>
+    <div id="mapWrap"><div id="map"></div><div id="mapBar"></div><div id="sheet"></div></div>
     <div id="panel">
       <div class="tabs">
         <button data-v="check" class="on">① 재고 체크</button>
@@ -267,6 +275,7 @@ function recalc(fromFetch) {
 function initMap() {
   const c = S.center || { lat: 37.3966, lng: 126.9630 };
   map = new naver.maps.Map('map', { center: new naver.maps.LatLng(c.lat, c.lng), zoom: 15, scaleControl: false, mapDataControl: false });
+  naver.maps.Event.addListener(map, 'click', () => { if (sheetId) { sheetId = null; renderSheet(); } });
   naver.maps.Event.addListener(map, 'idle', () => {
     const p = map.getCenter(); S.center = { lat: p.lat(), lng: p.lng() }; save();
     if (!me && !document.activeElement?.matches('input')) { renderList(); recalc(); }
@@ -281,18 +290,20 @@ function renderMarkers() {
   Object.values(overlays).forEach(o => o.setMap(null)); overlays = {};
   for (const st of Object.values(S.stores)) {
     const q = S.day.stock[st.id], done = S.day.done[st.id];
-    if (S.onlyHas && !has(q) && !done) continue;
+    if (S.onlyHas && !S.checkMode && !has(q) && !done) continue;
     const idx = route.indexOf(st.id);
     let cls = 'pin', txt = 'GS';
     if (done === 'buy') { cls += ' done'; txt = '✔ 구매'; }
     else if (done === 'miss') { cls += ' miss'; txt = '✕ 허탕'; }
     else if (has(q)) { cls += ' has'; txt = (idx >= 0 ? (idx+1) + '. ' : S.day.skip[st.id] ? '제외 ' : '') + lbl(q); }
-    else if (q === 0) { cls += ' zero'; txt = '0'; }
+    else if (q === 0) { cls += ' zero'; txt = '없음'; }
     const el = document.createElement('div'); el.className = cls; el.textContent = txt; el.title = st.name;
-    el.onclick = () => { cycle(st.id); flash(`${st.name}: ${lbl(S.day.stock[st.id])}`); document.getElementById('r-' + st.id)?.scrollIntoView({ block: 'nearest' }); };
     const o = new naver.maps.Marker({ map, position: new naver.maps.LatLng(st.lat, st.lng), icon: { content: el, anchor: new naver.maps.Point(0, 0) }, zIndex: has(q) ? 3 : 1, title: st.name });
+    naver.maps.Event.addListener(o, 'click', () => tapMarker(st.id));
     overlays[st.id] = o;
   }
+  $('#mapWrap').classList.toggle('checking', !!S.checkMode);
+  renderMapBar(); renderSheet();
   if (routeLine) routeLine.setMap(null);
   routeLine = null;
   const real = realLegs() && rt.coords;
@@ -302,6 +313,54 @@ function renderMarkers() {
     routeLine = new naver.maps.Polyline({ map, path, strokeWeight: real ? 5 : 4, strokeColor: '#00b3d6', strokeOpacity: .9, strokeStyle: real ? 'solid' : 'shortdash' });
   }
 }
+
+// ---------- 지도 위 바로가기 ----------
+let sheetId = null;
+function tapMarker(id) {
+  if (S.checkMode) {
+    // 체크 모드: 탭할 때마다 있음 ↔ 미확인
+    setStock(id, has(S.day.stock[id]) ? undefined : -1);
+    navigator.vibrate?.(15);
+  } else { sheetId = id; renderSheet(); }
+}
+function renderMapBar() {
+  const n = Object.values(S.stores).filter(s => has(S.day.stock[s.id])).length;
+  $('#mapBar').innerHTML = S.checkMode
+    ? `<button class="chip mode" data-mb="mode">✔ 체크 중 · 있음 ${n}곳 (끄기)</button><button class="chip" data-mb="rest">나머지 없음</button><button class="chip" data-mb="done">체크 끝 → 경로</button>`
+    : `<button class="chip" data-mb="mode">재고 체크 모드</button><button class="chip ${S.onlyHas ? 'on' : ''}" data-mb="only">재고만 보기</button><button class="chip" data-mb="find">여기서 GS 찾기</button>`;
+}
+$('#mapBar').addEventListener('click', e => {
+  const a = e.target.dataset.mb; if (!a) return;
+  if (a === 'mode') { S.checkMode = !S.checkMode; sheetId = null; save(); renderMarkers(); if (S.checkMode) flash('재고 있는 GS를 탭하세요'); }
+  else if (a === 'rest') $('#restZero').click();
+  else if (a === 'done') { S.checkMode = false; save(); renderMarkers(); switchTab('route'); }
+  else if (a === 'only') $('#onlyHas').click();
+  else if (a === 'find') findStores();
+});
+function renderSheet() {
+  const el = $('#sheet'), st = S.stores[sheetId];
+  if (!st || S.checkMode) { el.style.display = 'none'; return; }
+  const v = S.day.stock[st.id], i = route.indexOf(st.id), d = S.day.done[st.id];
+  el.style.display = 'block';
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;min-width:0"><b>${esc(st.name)}</b> <span style="color:var(--gs);font-weight:700">${lbl(v)}</span>
+      <span class="muted">${i >= 0 ? ` · 경로 ${i + 1}번째` : ''}${S.day.skip[st.id] ? ' · 제외됨' : ''}${d ? ` · ${d === 'buy' ? '구매함' : '허탕'}` : ''}</span></div>
+      <button class="btn sm" data-close="1">✕</button></div>
+    <div class="acts">
+      <button class="btn sm ${has(v) ? 'p' : ''}" data-set="-1">있음</button>
+      <button class="btn sm ${v === 0 ? 'no' : ''}" data-set="0">없음</button>
+      <button class="btn sm" data-set="">미확인</button>
+      ${has(v) && !d ? `${i > 0 ? `<button class="btn sm" data-first="${st.id}">다음으로</button>` : ''}
+        ${S.day.skip[st.id] ? `<button class="btn sm" data-unskip="${st.id}">다시 포함</button>` : `<button class="btn sm" data-skip="${st.id}">제외</button>`}
+        <button class="btn sm ok" data-buy="${st.id}">샀음</button><button class="btn sm no" data-miss="${st.id}">허탕</button>` : ''}
+      ${d ? `<button class="btn sm" data-undo="${st.id}">방문 되돌리기</button>` : ''}
+      ${isMobile ? `<a class="btn sm" href="${naverLink(st)}">네이버 길안내</a>` : `<a class="btn sm" href="${kakaoLink([st])}" target="_blank">카카오맵</a>`}
+    </div>`;
+}
+$('#sheet').addEventListener('click', e => {
+  const t = e.target.dataset;
+  if (t.close) { sheetId = null; renderSheet(); }
+  else if (t.set !== undefined) setStock(sheetId, t.set === '' ? undefined : +t.set);
+});
 
 function findStores() {
   if (!map) return;
