@@ -258,21 +258,68 @@ function cost(a, b) {
   return road(a, b) / (S.speed / 3.6);
 }
 function scheduleFetch() { clearTimeout(fetchT); fetchT = setTimeout(fetchReal, 600); }
+// 무료 공용 경로 서버는 가끔 멈춤 → OSRM → BRouter → Valhalla 순서로 시도
+const OSRM = 'https://routing.openstreetmap.de/routed-bike';
+async function getJSON(url, ms = 12000) {
+  const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms);
+  try { const r = await fetch(url, { signal: ac.signal }); if (!r.ok) throw new Error(r.status); return await r.json(); }
+  finally { clearTimeout(t); }
+}
+const ll = p => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`;
+// 경로 선을 지점마다 잘라 구간 거리 계산 (구간 정보를 안 주는 서버용)
+function splitLegs(coords, pts) {
+  const legs = []; let from = 0;
+  for (let k = 1; k < pts.length; k++) {
+    let best = from, bd = Infinity;
+    const lim = k === pts.length - 1 ? coords.length - 1 : coords.length - 1;
+    for (let i = from; i <= lim; i++) { const d = hav({ lng: coords[i][0], lat: coords[i][1] }, pts[k]); if (d < bd) { bd = d; best = i; } if (bd < 15 && d > 300) break; }
+    let dist = 0;
+    for (let i = from; i < best; i++) dist += hav({ lng: coords[i][0], lat: coords[i][1] }, { lng: coords[i + 1][0], lat: coords[i + 1][1] });
+    legs.push({ distance: dist, duration: dist / (S.speed / 3.6) });
+    from = best;
+  }
+  return legs;
+}
+const ROUTERS = [
+  ['OSRM', async pts => {
+    const r = await getJSON(`${OSRM}/route/v1/driving/${pts.map(ll).join(';')}?overview=full&geometries=geojson`);
+    if (r.code !== 'Ok') throw new Error(r.code);
+    // OSRM 자전거 기본속도(15km/h) → 설정한 전기자전거 속도로 환산
+    return { coords: r.routes[0].geometry.coordinates, legs: r.routes[0].legs.map(l => ({ distance: l.distance, duration: l.duration * 15 / S.speed })) };
+  }],
+  ['BRouter', async pts => {
+    const r = await getJSON(`https://brouter.de/brouter?lonlats=${pts.map(ll).join('|')}&profile=trekking&alternativeidx=0&format=geojson`);
+    const coords = r.features[0].geometry.coordinates.map(c => [c[0], c[1]]);
+    return { coords, legs: splitLegs(coords, pts) };
+  }],
+  ['Valhalla', async pts => {
+    const legs = [], coords = [];
+    for (let i = 0; i < pts.length - 1; i += 9) {   // 한 번에 10지점까지, 차례로 요청
+      const r = await val('route', { locations: pts.slice(i, i + 10).map(loc), ...bike(), directions_type: 'none', units: 'kilometers' });
+      for (const l of r.trip.legs) { legs.push({ distance: l.summary.length * 1000, duration: l.summary.time }); coords.push(...decode6(l.shape)); }
+    }
+    return { coords, legs };
+  }],
+];
+let routerIdx = 0;   // 마지막으로 성공한 서버부터 시도
 async function fetchRoute(seq) {
   const o = origin(), ids = [...route];
   if (!o || !ids.length) return;
   const rk = ids.join(','), ok = okey();
   if (rt && rt.key === rk && rt.okey === ok) return;
   const pts = [o, ...ids.map(id => S.stores[id])];
-  const legs = [], coords = [];
-  // 공개 서버는 한 번에 10지점까지 → 나눠서 동시에 요청
-  const chunks = [];
-  for (let i = 0; i < pts.length - 1; i += 9) chunks.push(pts.slice(i, i + 10));
-  const rs = await Promise.all(chunks.map(c => val('route', { locations: c.map(loc), ...bike(), directions_type: 'none', units: 'kilometers' })));
-  for (const r of rs) for (const l of r.trip.legs) { legs.push({ distance: l.summary.length * 1000, duration: l.summary.time }); coords.push(...decode6(l.shape)); }
-  if (seq !== fetchSeq) return;
-  rt = { key: rk, okey: ok, legs, coords };
-  renderRoute(); renderMarkers();
+  for (let n = 0; n < ROUTERS.length; n++) {
+    const k = (routerIdx + n) % ROUTERS.length, [name, run] = ROUTERS[k];
+    try {
+      const res = await run(pts);
+      if (seq !== fetchSeq) return;
+      routerIdx = k;
+      rt = { key: rk, okey: ok, ...res, by: name };
+      renderRoute(); renderMarkers();
+      return;
+    } catch (e) { console.warn(`경로 서버 ${name} 실패`, e); }
+  }
+  throw new Error('모든 경로 서버 실패');
 }
 async function fetchReal() {
   const seq = ++fetchSeq, o = origin(), ts = targets();
@@ -280,20 +327,17 @@ async function fetchReal() {
   try {
     // 1) 지금 순서대로 도로 경로 먼저 그림
     await fetchRoute(seq);
-    // 2) 실제 자전거 시간 행렬로 순서 다시 최적화 (50지점까지)
-    const mk = okey() + '|' + ts.map(s => s.id).sort().join(',') + '|' + S.speed;
-    if (ts.length < 40 && (!mtx || mtx.key !== mk)) {
-      const pts = [{ id: '@o', ...o }, ...ts], n = pts.length, B = 10;
-      // 공개 서버는 한 번에 10×10까지 → 블록으로 나눠 동시에 요청
-      const D = Array.from({ length: n }, () => Array(n).fill(null)), jobs = [];
-      for (let a = 0; a < n; a += B) for (let b = 0; b < n; b += B) jobs.push(
-        val('sources_to_targets', { sources: pts.slice(a, a + B).map(loc), targets: pts.slice(b, b + B).map(loc), ...bike() })
-          .then(r => r.sources_to_targets.forEach((row, i) => row.forEach((c, j) => { D[a + i][b + j] = c.time; }))));
-      await Promise.all(jobs);
-      if (seq !== fetchSeq) return;
-      mtx = { key: mk, idx: Object.fromEntries(pts.map((p, i) => [p.id, i])), D };
-      recalc(true);
-      await fetchRoute(seq);
+    // 2) OSRM 이동시간표(요청 1번)로 순서 다시 최적화. 실패하면 직선 추정 순서 유지
+    const mk = okey() + '|' + ts.map(s => s.id).sort().join(',');
+    if (ts.length <= 90 && (!mtx || mtx.key !== mk)) {
+      const pts = [{ id: '@o', ...o }, ...ts];
+      try {
+        const r = await getJSON(`${OSRM}/table/v1/driving/${pts.map(ll).join(';')}?annotations=duration`);
+        if (r.code !== 'Ok' || seq !== fetchSeq) return;
+        mtx = { key: mk, idx: Object.fromEntries(pts.map((p, i) => [p.id, i])), D: r.durations };
+        recalc(true);
+        await fetchRoute(seq);
+      } catch (e) { console.warn('이동시간표 실패, 직선 추정 순서 사용', e); }
     }
   } catch (e) { console.warn('자전거 경로 실패, 직선 추정 사용', e); }
 }
