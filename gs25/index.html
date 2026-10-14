@@ -260,12 +260,11 @@ async function fetchRoute(seq) {
   if (rt && rt.key === rk && rt.okey === ok) return;
   const pts = [o, ...ids.map(id => S.stores[id])];
   const legs = [], coords = [];
-  // 한 번에 최대 20지점씩 나눠 요청
-  for (let i = 0; i < pts.length - 1; i += 19) {
-    const chunk = pts.slice(i, i + 20);
-    const r = await val('route', { locations: chunk.map(loc), ...bike(), directions_type: 'none', units: 'kilometers' });
-    for (const l of r.trip.legs) { legs.push({ distance: l.summary.length * 1000, duration: l.summary.time }); coords.push(...decode6(l.shape)); }
-  }
+  // 공개 서버는 한 번에 10지점까지 → 나눠서 동시에 요청
+  const chunks = [];
+  for (let i = 0; i < pts.length - 1; i += 9) chunks.push(pts.slice(i, i + 10));
+  const rs = await Promise.all(chunks.map(c => val('route', { locations: c.map(loc), ...bike(), directions_type: 'none', units: 'kilometers' })));
+  for (const r of rs) for (const l of r.trip.legs) { legs.push({ distance: l.summary.length * 1000, duration: l.summary.time }); coords.push(...decode6(l.shape)); }
   if (seq !== fetchSeq) return;
   rt = { key: rk, okey: ok, legs, coords };
   renderRoute(); renderMarkers();
@@ -278,11 +277,16 @@ async function fetchReal() {
     await fetchRoute(seq);
     // 2) 실제 자전거 시간 행렬로 순서 다시 최적화 (50지점까지)
     const mk = okey() + '|' + ts.map(s => s.id).sort().join(',') + '|' + S.speed;
-    if (ts.length < 50 && (!mtx || mtx.key !== mk)) {
-      const pts = [{ id: '@o', ...o }, ...ts];
-      const r = await val('sources_to_targets', { sources: pts.map(loc), targets: pts.map(loc), ...bike() });
+    if (ts.length < 40 && (!mtx || mtx.key !== mk)) {
+      const pts = [{ id: '@o', ...o }, ...ts], n = pts.length, B = 10;
+      // 공개 서버는 한 번에 10×10까지 → 블록으로 나눠 동시에 요청
+      const D = Array.from({ length: n }, () => Array(n).fill(null)), jobs = [];
+      for (let a = 0; a < n; a += B) for (let b = 0; b < n; b += B) jobs.push(
+        val('sources_to_targets', { sources: pts.slice(a, a + B).map(loc), targets: pts.slice(b, b + B).map(loc), ...bike() })
+          .then(r => r.sources_to_targets.forEach((row, i) => row.forEach((c, j) => { D[a + i][b + j] = c.time; }))));
+      await Promise.all(jobs);
       if (seq !== fetchSeq) return;
-      mtx = { key: mk, idx: Object.fromEntries(pts.map((p, i) => [p.id, i])), D: r.sources_to_targets.map(row => row.map(c => c.time)) };
+      mtx = { key: mk, idx: Object.fromEntries(pts.map((p, i) => [p.id, i])), D };
       recalc(true);
       await fetchRoute(seq);
     }
